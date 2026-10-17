@@ -4,6 +4,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 )
@@ -18,6 +19,15 @@ const (
 	Active    = "active"
 	Closed    = "closed"
 	MaxChunk  = 64 << 10
+)
+
+const (
+	MaxCommandBytes = 1 << 20
+	// JSON may encode one source byte as six bytes (for example, > as \u003e).
+	// The extra 128 KiB covers the three bounded 4096-byte owner/key fields,
+	// their own worst-case escaping, and the RPC or MCP envelope.
+	MaxRequestBytes  = 6*MaxCommandBytes + (128 << 10)
+	MaxResponseBytes = 2 << 20
 )
 
 type Owner struct {
@@ -48,7 +58,7 @@ type Job struct {
 	ConnectionID   string    `json:"connection_id"`
 	Owner          Owner     `json:"owner"`
 	IdempotencyKey string    `json:"idempotency_key"`
-	Command        string    `json:"command"`
+	Command        string    `json:"command,omitempty"`
 	TimeoutMillis  int64     `json:"timeout_ms"`
 	State          string    `json:"state"`
 	Reason         string    `json:"reason,omitempty"`
@@ -96,6 +106,21 @@ type Response struct {
 	Duplicate  bool        `json:"duplicate,omitzero"`
 	Error      string      `json:"error,omitempty"`
 	Code       string      `json:"code,omitempty"`
+}
+
+// MarshalJSON projects job metadata for RPC responses. The complete source stays
+// in the durable Job and internal execution/idempotency paths, but must not grow
+// every acknowledgement or output response. Copy before removing it so encoding
+// a response can never change the stored job or another caller's view.
+func (r Response) MarshalJSON() ([]byte, error) {
+	type wireResponse Response
+	result := wireResponse(r)
+	if r.Job != nil {
+		job := *r.Job
+		job.Command = ""
+		result.Job = &job
+	}
+	return json.Marshal(result)
 }
 
 var (

@@ -243,7 +243,7 @@ func (e *Engine) submit(request Request) (*Job, bool, error) {
 	if strings.ContainsRune(request.Command, 0) {
 		return nil, false, errors.New("command cannot contain NUL bytes")
 	}
-	if len(request.Command) > 1<<20 {
+	if len(request.Command) > MaxCommandBytes {
 		return nil, false, errors.New("command exceeds 1 MiB")
 	}
 	timeout := e.config.CommandTimeout.Milliseconds()

@@ -40,3 +40,20 @@ target-runner-install:
 runner-check:
 	go test -race ./...
 	go vet ./...
+
+.PHONY: mcp-lab-up mcp-lab-down mcp-lab-status mcp-lab-login mcp-lab-test
+
+mcp-lab-up:
+	$(PYTHON) tools/mcp_lab.py up
+
+mcp-lab-down:
+	$(PYTHON) tools/mcp_lab.py down
+
+mcp-lab-status:
+	$(PYTHON) tools/mcp_lab.py status
+
+mcp-lab-login:
+	$(PYTHON) tools/mcp_lab.py login
+
+mcp-lab-test:
+	$(PYTHON) tests/integration_mcp.py -v

@@ -202,3 +202,215 @@ The CP4 readiness review corrections received the following additional checks:
   manifest/key/pin/config bytes were preserved, and both VMs were stopped.
 
 The full crash/reboot harness was not repeated for these readiness corrections.
+# Checkpoint 5 builder evidence (2026-10-17)
+
+The private MCP implementation is described in [MCP.md](MCP.md). These are
+developer results before independent Translation, final validation, Tester,
+and Review; they are not checkpoint acceptance or the later agent-deployment
+exercise.
+
+- Gateway/runner Go race tests and vet passed. Existing host-only Python lab
+  safety tests passed (12 cases). Gateway checks exercise actual signed JWKS
+  verification, issuer/audience/expiry/subject/scope rejection, verified-owner
+  mapping, bounded lossless output, three-tool HTTP mapping, native SSH pins and
+  independent channel limits, no automatic replay, and the OAuth resource guard.
+- Real authenticated MCP shell tests passed for persistent Bash state,
+  independent connections, serial batches, byte cursors/readable/binary output,
+  idempotency/conflicts, 16 active jobs, capacity/busy rejection, prompt cancel,
+  and deadlines. Evidence: private
+  `.lab/results/20261017T134233Z-mcp-integration-e36d14c295984ef0b39ad99b8c8d7046/`.
+  That run's auth fixture failed because an empty OAuth scope was rejected by
+  Keycloak; the fixture was corrected to request openid-only and check gateway
+  scope denial. It is not recorded as an entirely passing suite.
+- The corrected real auth case subsequently passed in isolation, including
+  unknown/mismatched authorization-code resources, intended/omitted refresh
+  audience, rejected unknown/duplicate refresh resource, required admin scope,
+  and cross-principal isolation. Evidence: private
+  `.lab/mcp/auth-developer-check.json` and
+  `.lab/mcp/keycloak-refresh-protected.json`.
+- Repeated private authorization configuration retained the two existing user
+  IDs, resource client UUID, and pre-registered Codex RP identity. Private logs:
+  `.lab/mcp/auth-final-configuration-{0,1}.log`. The final setup's authenticated
+  catalog passed in
+  `.lab/results/20261017T135546Z-mcp-up-d8963072c46f48e0b5d019a6b460e8f4/`.
+- Installed Codex 0.162.1 performed normal Authorization Code + S256 PKCE login.
+  A fresh process then completed real `connect`, execute, output/status, and
+  `disconnect` calls, returning `CP5_CODEX_REUSED`. It began 151.485 seconds after
+  the successful login, beyond the configured 60-second access-token lifetime,
+  and reused/refreshed stored credentials without a new login. Evidence:
+  `.lab/mcp/codex-use3.jsonl`, `codex-use3.txt`, and `codex-use3-summary.json`.
+  The user's account/model settings were retained; only private-server and
+  invocation-local tool/isolation overrides were supplied.
+
+The tests also exposed concrete interoperability boundaries: explicit Codex
+`oauth_resource` duplicated its authorization parameter; missing Keycloak subject
+mapping was rejected; Codex refresh needed its allowed optional offline scope;
+and pinned Keycloak refresh ignored resource indicators. The implementation
+preserves strict JWT checks and adds the fixed private resource guard plus a
+canonical URI resource-client ID. Failed login/tool traces and the original
+refresh matrix remain private under `.lab/mcp/`; unsuccessful CLI runs are not
+counted by their exit code alone.
+
+The full CP5 gateway/SSH/reboot/abandonment fault suite is implemented in
+`tests/integration_mcp.py` but did not complete a successful full builder
+run. The subsequent independent attempt is recorded below. CP4's earlier runner
+recovery evidence remains separate. No application deployment, baseline restore,
+target Docker installation, public endpoint, or CP6/CP7 acceptance was performed
+for these CP5 developer checks.
+
+## Checkpoint 5 independent test failure and fixture correction (2026-10-17)
+
+The dedicated Tester ran six live methods in 53.962s: the first three passed;
+the fault method errored and both expiry assertions failed. This was a failed
+suite, not CP5 acceptance. Private evidence:
+`.lab/mcp/tester-live-output.log` and
+`.lab/results/20261017T141416Z-mcp-integration-bb1344c291934dc3b3e0948505d723b0/`.
+
+- The passing methods covered authentication/resource/refresh/ownership checks,
+  persistent and isolated shell state, output/deduplication, 16 active jobs,
+  capacity/busy rejection, cancellation, and deadlines.
+- The fault method passed gateway restart, SSH transport loss, recovery after
+  an actual changed target boot ID, `lost`/`shell_state_lost`, and duplicate
+  recognition. Its final side-effect check failed because Ubuntu removed the
+  marker under `/tmp` during reboot. That attempt did not establish the final
+  no-replay side-effect claim.
+- Idle expiry returned the defined `lost/idle_timeout`; the fixture incorrectly
+  expected `closed`. The Tester's extra active-lifetime method likewise observed
+  `lost/max_lifetime` for its connection and failed an incorrect `closed`
+  expectation. These state mismatches did not demonstrate a runner defect.
+- The Tester reported byte-equal restoration of the normal runner unit. The
+  evidence recorded no cleanup errors; both VMs were stopped and their original
+  baseline/owner/pin/private-file comparisons were unchanged.
+
+The corrected harness uses a unique private marker in `/home/mcp-test/`, removes
+it during cleanup, and saves expected/observed contents plus the before/after
+boot IDs in private `replay-marker.json`. The idle assertion now requires
+`lost/idle_timeout`. Within the same temporary two-second idle/five-second
+lifetime service configuration, it also starts a real sleeping job and requires
+`failed/max_lifetime`, connection `lost/max_lifetime`, and no trailing output.
+The normal runner service is still restored in `finally`; restoration failures
+are retained separately from the primary test failure.
+
+Diagnostics now independently verify each running VM's ownership before bounded
+inspection. The existing private control log is retained; the private target
+log adds the runner journal, status, and current unit. Neither diagnostic path
+starts a stopped VM or changes guest state. A failure on one profile does not
+skip the other. Diagnostics precede shutdown, and evidence is written after all
+shutdown attempts so it includes shutdown errors as well as earlier failures.
+
+For this correction, `python3 -m unittest discover -s tests -v` passed all 18
+host-only checks, including independent diagnostic collection, ownership refusal,
+stopped/absent profile refusal, and primary/cleanup error retention. Python syntax
+and whitespace checks passed for the corrected files. These checks did not start
+or operate either VM, install a service, or repeat the live MCP suite. The final
+translated code still requires final validation, a fresh dedicated live Tester,
+and independent Review before CP5 acceptance. CP6/CP7 remain outside this work.
+
+## Checkpoint 5 final independent validation (2026-10-17)
+
+After correction Translation and final local validation, a fresh dedicated
+Tester installed the current build and ran all five permanent live methods:
+**PASS, 53.615s** (53.691s outer duration), exit 0. Private evidence is in
+`.lab/results/20261017T143402Z-mcp-integration-071867762b054d56a71064d4591936aa/`
+and the consolidated `.lab/mcp/final-tester-runtime.json`.
+
+The run established authentication/resource/refresh/ownership enforcement,
+persistent isolated shell state, incremental output, idempotency, 16 active jobs,
+cancellation/deadline handling, gateway restart, scoped SSH loss, actual target
+reboot without replay, idle expiry, and active maximum-lifetime expiry. The
+reboot-persistent marker contained exactly `onceonce`; before/after boot IDs and
+marker contents are retained in `replay-marker.json`. Both VM diagnostics were
+saved before shutdown. The target unit was byte-equal to the normal runner unit
+without shortened timer flags. Cleanup errors were empty; both VMs were stopped.
+Owners, baselines, management keys, host pins, accounts, and authenticated subjects
+were preserved. The permanent test source was unchanged during this run.
+
+The Tester independently inspected actual completed Codex tool results in
+`.lab/mcp/codex-usetesterFinal{.jsonl,.txt,-summary.json}`: connect, execute,
+completed output `CP5_CODEX_REUSED` with exit 0, and closed disconnect. That
+15.25s run began 949.446s after the stored login against a 60-second access-token
+lifetime, without a new login. The final Python-only fixture correction did not
+change gateway/client configuration. The Tester also passed all 18 host safety
+tests and all eight local JWT HTTP subcases. Coordinator final checks passed
+Go formatting/race/vet, Linux ARM64 builds, Python/shell syntax, and whitespace.
+Independent Review remains the final checkpoint gate. CP6/CP7 agent deployment
+acceptance is not established by these results.
+
+## Checkpoint 5 request/response bounds correction (2026-10-17)
+
+Independent Review subsequently denied the implementation for two uncovered
+size boundaries. A valid 1,043,517-byte tab-heavy source fit the former 2 MiB
+request and acknowledgement limits, but echoing that source alongside the
+default 8 KiB stdout chunk exceeded the 2 MiB response limit. A valid
+1,048,014-byte source with a long `>` comment expanded to more than 6 MiB under
+Go's default JSON HTML escaping, exceeding the target CLI and Unix request
+decoders. The earlier passing five-case live run remains valid for its recorded
+cases; it did not exercise either of these sizes.
+
+The correction projects command-free job responses by copying the job before
+serialization. Durable records, internal execution, and exact-source
+idempotency retain the complete command. All source admission/load checks use
+the same 1 MiB limit. HTTP's outer reader, the MCP SDK's separate body reader,
+target CLI stdin, and both daemon/worker Unix request decoders now share a
+6,422,528-byte budget: six times the source bound plus 128 KiB for escaped
+owner/key metadata and the RPC/MCP envelope. Response decoders and SSH capture
+keep a separate finite 2 MiB cap. Default JSON escaping remains supported.
+
+Focused local tests send both exact source sizes through the real Unix runner
+and Bash worker, read the 8 KiB boundary output, verify source-free responses,
+restart the engine, and check full-source persistence, same-key deduplication,
+and changed-source conflict. A separate HTTP assertion sends a maximum 1 MiB
+source with default Go HTML escaping above the SDK's former 4 MiB body limit.
+The existing live shell/output method now executes both size classes through
+MCP/SSH/CLI/runner/worker, requires 8,192 stdout bytes, and checks duplicate,
+lookup, and bounded status responses.
+
+Builder's full local Go race suite, focused boundary rerun, local vet/Linux ARM64
+build, all 18 host-only Python safety checks, Python syntax, and whitespace
+checks passed. No VM was
+started or operated for this correction. Final translated-code checks, the
+extended five-case live suite by a fresh dedicated Tester, and fresh independent
+Review are still required. The earlier 53.615s live result does not validate
+these new boundary cases. CP6/CP7 remain outside this work.
+
+## Checkpoint 5 extended final live validation (2026-10-17)
+
+After fresh Translation, coordinator final checks passed formatting, full race
+tests (gateway 4.347s, runner 23.839s), vet, both Linux ARM64 builds, all 18 host
+safety tests, syntax, and whitespace. A fresh dedicated Tester installed both
+current binaries and independently matched their guest/host hashes. The target
+still had no Docker or application deployment.
+
+The unchanged permanent five-case live suite **passed in 55.524s** (55.591s
+outer), exit 0. Both large-source subcases completed through actual HTTP, native
+SSH, target CLI, Unix runner, and Bash worker, each returning 8,192 stdout bytes.
+Duplicate/lookup retained the original job ID and status stayed source-free and
+bounded. All other authentication, execution, recovery, reboot/no-replay, and
+expiry cases passed. Private evidence:
+`.lab/results/20261017T145714Z-mcp-integration-636de0f4dff94ce69e873abc6d3d56f6/`
+and `.lab/mcp/wire-tester-runtime.json`.
+
+The Tester independently verified an actual changed target boot UUID in its
+journal and exact marker `onceonce`. The raw Multipass boot-output artifact
+retains a progress prefix; it is not treated as a normalized UUID. Both VM logs
+were saved before shutdown; the normal runner unit was restored byte-for-byte,
+cleanup errors were empty, and both VMs were stopped. Owners, baselines, keys,
+pins, accounts, and permanent test source were unchanged. Current pre-suite
+subjects matched prior identities; post-reboot subjects were not decoded again,
+although authenticated calls after reboot passed.
+
+A fresh isolated installed-Codex stored-login proof passed in 12.105s, starting
+3,561.443s after the login log against a 60-second access-token lifetime.
+The Tester verified actual active connect, accepted execute, completed exit-0
+output `CP5_CODEX_REUSED`, and closed disconnect. Its known post-completion
+shutdown warning is retained; exit status alone is not the success criterion.
+Private proof: `.lab/mcp/codex-usewireFinal-summary.json` and associated JSONL.
+No new login, code edits, baseline reset, or deployment occurred. Fresh
+independent Review remains the final checkpoint gate.
+
+Fresh independent Review subsequently returned **Approved**, with no actionable
+findings. It independently passed the full race suite, vet, 18 host tests,
+formatting/syntax/whitespace checks, and both ARM64 builds; rebuilt hashes matched
+the live-test binaries. It inspected the raw live/Codex, reboot, no-replay,
+restoration, and preservation evidence without repeating VM or model operations.
+This approval covers checkpoint 5 only; CP6/CP7 and public HTTPS remain excluded.

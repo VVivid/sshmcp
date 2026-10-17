@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-const maxRequest = 2 << 20
-
 // Call makes one short Unix-socket RPC. Closing the caller's connection never
 // cancels an accepted job; cancellation is a separate, explicit request.
 func Call(ctx context.Context, socket string, request, response any) error {
@@ -32,7 +30,7 @@ func Call(ctx context.Context, socket string, request, response any) error {
 	if err := json.NewEncoder(conn).Encode(request); err != nil {
 		return err
 	}
-	return json.NewDecoder(io.LimitReader(conn, maxRequest)).Decode(response)
+	return json.NewDecoder(io.LimitReader(conn, MaxResponseBytes)).Decode(response)
 }
 
 func listen(socket string) (net.Listener, error) {
@@ -77,7 +75,7 @@ func serve(ctx context.Context, listener net.Listener, handle func(json.RawMessa
 			defer conn.Close()
 			conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 			var request json.RawMessage
-			if err := json.NewDecoder(io.LimitReader(conn, maxRequest)).Decode(&request); err != nil {
+			if err := json.NewDecoder(io.LimitReader(conn, MaxRequestBytes)).Decode(&request); err != nil {
 				json.NewEncoder(conn).Encode(Response{Error: "invalid JSON request", Code: "invalid_request"})
 				return
 			}

@@ -66,7 +66,7 @@ func openStore(root string) (*store, database, error) {
 	}
 	seen := map[dedupIdentity]bool{}
 	for id, j := range db.Jobs {
-		if j == nil || !validID(id) || j.ID != id || !j.Owner.valid() || j.IdempotencyKey == "" || db.Connections[j.ConnectionID] == nil || j.TimeoutMillis <= 0 || len(j.Command) > 1<<20 || strings.ContainsRune(j.Command, 0) || j.AcceptedAt.IsZero() {
+		if j == nil || !validID(id) || j.ID != id || !j.Owner.valid() || j.IdempotencyKey == "" || db.Connections[j.ConnectionID] == nil || j.TimeoutMillis <= 0 || len(j.Command) > MaxCommandBytes || strings.ContainsRune(j.Command, 0) || j.AcceptedAt.IsZero() {
 			s.close()
 			return nil, db, errors.New("invalid job record")
 		}

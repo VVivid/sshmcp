@@ -26,6 +26,12 @@ prints one JSON response, and exits. This CLI is designed to be invoked over a
 pinned SSH connection by the future gateway. It does not require a long-lived
 SSH channel to keep a job alive.
 
+Source is limited to 1 MiB. CLI stdin and both daemon/worker Unix request
+decoders allow up to 6,422,528 encoded bytes, covering six-byte JSON escaping
+plus 128 KiB of metadata. RPC response decoders retain a separate 2 MiB cap.
+Responses project job metadata without the source; durable records retain the
+complete command for execution and idempotency, including after restart.
+
 Lab readiness uses an internal `health` action through this same private RPC.
 It requires the same nonempty owner fields, returns an empty successful response
 only after startup recovery and RPC binding, and rejects a fatal or closing

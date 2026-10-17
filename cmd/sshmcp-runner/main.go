@@ -84,7 +84,7 @@ func run() error {
 		return runner.RunWorker(ctx, *root, *socket, *shellHome, *grace, *quota)
 	case "rpc":
 		var request runner.Request
-		decoder := json.NewDecoder(io.LimitReader(os.Stdin, 2<<20))
+		decoder := json.NewDecoder(io.LimitReader(os.Stdin, runner.MaxRequestBytes))
 		decoder.DisallowUnknownFields()
 		if err := decoder.Decode(&request); err != nil {
 			return fmt.Errorf("request: %w", err)

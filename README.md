@@ -243,11 +243,15 @@ between fresh provisions.
 3. **Validate the infrastructure:** a modest set of failure and repeatability checks.
 4. **Native execution foundation:** separate target profile, persistent Bash,
    durable jobs/output/idempotency, cancellation, deadlines, and recovery.
+5. **Private authenticated MCP:** official Go SDK gateway, three tools, native
+   SSH, private Keycloak/Postgres, local Codex OAuth, and an opt-in integration
+   suite. Run `make mcp-lab-up`; see [lab/MCP.md](lab/MCP.md) for login and contracts.
 
 Checkpoints 1–3 implement the original control infrastructure. Checkpoint 4 adds
-the target runner and its focused checks. MCP protocol calls, OAuth/authentication,
-the gateway, and agent acceptance remain pending. A passing default `lab-test`
-continues to cover only the control infrastructure fixture.
+the target runner and its focused checks. Checkpoint 5 adds private authenticated
+MCP access. Fresh-agent application deployment and independent acceptance remain
+later checkpoints. A passing default `lab-test` continues to cover only the
+control infrastructure fixture.
 
 ## Development checks
 
