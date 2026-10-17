@@ -210,11 +210,38 @@ it when guest changes are disposable and no other lab operation is running:
 python3 tests/integration_lab.py -v
 ```
 
-Its three cases exercise an expected workload failure, real handled `SIGTERM`,
-and reset removing a guest marker while repairing deliberately stopped Docker.
-The first two patch only the Python workload boundary after running the real
-fixture, restart that run's Compose service, then inject failure or the signal.
-They assert private failure results, removed active run resources, and stopped VM
-state. The reset case also asserts that ownership and SSH trust did not change.
-This harness is separate from ordinary test discovery; it adds no production
-fault-injection switches.
+Its five cases cover:
+
+- An expected workload failure and real handled `SIGTERM`. These two cases patch
+  only the Python workload boundary after the real fixture completes, restart
+  that run's Compose service, then inject failure or the signal. They assert
+  private failure results, removed active run resources, and a stopped VM.
+- Reset removing a guest marker while repairing deliberately stopped Docker,
+  with ownership, SSH trust, and baseline identity preserved.
+- A real SSH attempt with a disposable, unapproved Ed25519 key. It uses only that
+  key, requires the existing host pin, asserts public-key authentication denial,
+  and checks through authorized SSH that the attempted guest command did not run.
+- Refusal to stop the real running VM when an in-memory copy of its owner or host
+  pin is wrong. Both refusals must leave the VM running and the local manifest,
+  key, and pinned SSH configuration unchanged before an authorized final stop.
+
+The two security cases require an existing enrolled VM and a recorded ready
+baseline; they do not create or restore a baseline. To validate checkpoint 3
+without repeating the three deeper lifecycle cases:
+
+```sh
+python3 tests/integration_lab.py -v \
+  RealLabLifecycleTest.test_unapproved_ssh_key_cannot_execute \
+  RealLabLifecycleTest.test_down_refuses_owner_and_host_pin_mismatches
+make lab-test
+```
+
+Both new cases remove their disposable local keys and stop the ownership-verified
+VM in a final cleanup step. SSH key rejection tests infrastructure authentication;
+the owner/pin cases test local lab management safeguards. They do not test MCP
+principal ownership, OAuth, application authentication, persistent shells, or
+16 concurrent sessions. The harness is separate from ordinary test discovery and
+adds no production fault-injection switches.
+
+See [lab/VALIDATION.md](lab/VALIDATION.md) for reading order, reproducible commands,
+recorded evidence, and the limits of what has been exercised.
