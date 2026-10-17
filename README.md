@@ -1,20 +1,22 @@
 # SSHMCP testing lab
 
-This repository currently provides a reusable, private Linux VM for later SSHMCP
-development. It provisions Ubuntu 24.04 ARM64 with SSH, systemd,
+This repository provides two reusable private Linux VM profiles and a native Go
+execution runner. The original control lab provisions Ubuntu 24.04 ARM64 with SSH, systemd,
 Docker Engine, and the Docker Compose plugin. It creates a dedicated `mcp-test`
 account with its own generated SSH key, noninteractive sudo, and a lingering
 systemd user manager.
 
-The only deployed payload is a small infrastructure smoke fixture. There is no
-MCP application or current application build to deploy yet. MCP, authentication,
-and persistent-shell behavior remain future work.
+The target profile provides persistent native Bash connections, durable jobs,
+bounded output, idempotency, and independent cancellation. MCP transport, OAuth,
+and the gateway remain future checkpoints. The control lab keeps its original
+Docker/Compose infrastructure fixture.
 
 ## Requirements
 
 - An ARM64 macOS or Linux host supported by Multipass.
 - [Multipass](https://canonical.com/multipass/install), installed separately with
   its daemon running and the `multipass` command on `PATH`.
+- Go 1.26 or newer for building the native target runner.
 - Python 3.10 or newer, Make, and OpenSSH (`ssh` and `ssh-keygen`). Python uses only
   its standard library; no virtual environment or Python packages are required.
 - At least 2 CPUs, 4GB RAM, and 40GB disk available for this VM, plus Internet
@@ -103,6 +105,59 @@ After successful `lab-up`, an interactive connection is available with:
 ssh -F .lab/ssh_config sshmcp-test
 ```
 
+## Native execution target (checkpoint 4)
+
+The default `lab-*` commands continue to manage `sshmcp-test`. Explicit target
+commands manage `sshmcp-target` with Ubuntu 24.04 ARM64, 4 CPUs, 8GB RAM, and a
+40GB disk. Its clean baseline contains SSH, systemd, the lingering test account,
+and the native runner. It contains no Docker or application payload. Provisioning
+builds the current Go runner for Linux ARM64, installs it over the enrolled SSH
+connection, and records the baseline after runner readiness.
+
+```sh
+make target-up
+make target-status
+make target-test
+make target-runner-install
+make target-down
+```
+
+Target keys, host pin, manifest, baseline identity, and results live separately
+under `.lab/target/`. The explicit CLI equivalent is
+`python3 tools/lab.py up --profile target`; `--profile control` is the default.
+Both profiles share one lifecycle lock. Ownership checks, private NAT, no host
+mounts, strict pinned SSH, and exact snapshot/reset rules apply to both.
+
+`target-up` and `target-test` build the current runner and compare the actual
+guest binary/service hashes, upgrading only when they differ. `target-test`
+runs a small real SSH/runner smoke and stops the target afterward.
+`target-status` only inspects the running target, including a bounded private
+RPC health request. It never builds, installs, or restarts the runner, even if
+an interrupted provision left its local installation record incomplete.
+Lifecycle commands wait up to 45 seconds for RPC recovery; status makes one
+attempt with a 10-second host deadline. Health requests create no shell or job.
+`target-runner-install` explicitly performs the same build/hash check. Changed
+runner installations restart its service; live target shells become lost. The
+original baseline is preserved.
+`target-reset` destructively restores that target's original baseline, checks
+the current runner build, and stops it. The baseline snapshot itself is retained.
+The original control VM is never reset by these commands.
+
+For the full current-build CP4 check, including 16 concurrent jobs, independent
+cancellation, daemon crash, and a target reboot:
+
+```sh
+make target-up
+make target-runner-install
+python3 tests/integration_runner.py -v
+```
+
+This opt-in harness uses only the target, never restores a baseline, removes its
+own marker files, and stops the target after each case. The crash and reboot
+cases intentionally invalidate live target connections. Run them when other
+interactive target shells can be discarded. See [lab/RUNNER.md](lab/RUNNER.md)
+for the local RPC contract, execution model, limits, and failure behavior.
+
 ## Ownership and SSH trust
 
 Generated files live in gitignored `.lab/`, with directory permissions `0700` and
@@ -185,13 +240,14 @@ between fresh provisions.
    trust, readiness, up/down/status, and this usage guide.
 2. **Test lifecycle:** strict SSH integration checks, private diagnostic logs, and a
    baseline snapshot/reset workflow.
-3. **Validate and hand off:** a modest set of failure and repeatability checks,
-   verified usage instructions, and final handoff.
+3. **Validate the infrastructure:** a modest set of failure and repeatability checks.
+4. **Native execution foundation:** separate target profile, persistent Bash,
+   durable jobs/output/idempotency, cancellation, deadlines, and recovery.
 
-Checkpoints 1 and 2 implement the infrastructure above. Current-build application
-deployment, MCP protocol calls, OAuth/authentication, gateway/runner behavior,
-persistent sessions, and the planned 16-session cases are pending. A passing
-`lab-test` makes no claim about those future application tests.
+Checkpoints 1–3 implement the original control infrastructure. Checkpoint 4 adds
+the target runner and its focused checks. MCP protocol calls, OAuth/authentication,
+the gateway, and agent acceptance remain pending. A passing default `lab-test`
+continues to cover only the control infrastructure fixture.
 
 ## Development checks
 

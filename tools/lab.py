@@ -5,7 +5,9 @@ import argparse
 import base64
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from dataclasses import dataclass
 import fcntl
+import hashlib
 import ipaddress
 import json
 import os
@@ -17,6 +19,7 @@ import signal
 import stat
 import subprocess
 import sys
+import time
 import uuid
 
 
@@ -64,6 +67,44 @@ check 'systemd user manager' sudo -n -u mcp-test env \
     "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$test_uid/bus" \
     systemctl --user is-active default.target
 """
+
+
+@dataclass(frozen=True)
+class Profile:
+    name: str
+    vm: str
+    directory: Path
+    template: Path
+    smoke: Path
+    cpus: str
+    memory: str
+    summary: str
+
+
+PROFILES = {
+    "control": Profile("control", "sshmcp-test", ROOT / ".lab", TEMPLATE, SMOKE, "2", "4G", "systemd, SSH, Docker/Compose, user manager"),
+    "target": Profile("target", "sshmcp-target", ROOT / ".lab" / "target", ROOT / "lab" / "target-cloud-init.v1.yaml", ROOT / "lab" / "target-smoke.v1.sh", "4", "8G", "systemd, SSH, native runner, user manager"),
+}
+PROFILE = PROFILES["control"]
+CONTROL_HEALTH = HEALTH_SCRIPT
+TARGET_HEALTH = "\n".join(line for line in CONTROL_HEALTH.splitlines() if not any(value in line for value in ("Docker daemon", "Docker Engine API", "Compose plugin"))) + r"""
+check 'native runner installed' test -x /usr/local/bin/sshmcp-runner
+check 'native runner user service' sudo -n -u mcp-test env \
+    "XDG_RUNTIME_DIR=/run/user/$test_uid" \
+    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$test_uid/bus" \
+    systemctl --user is-active sshmcp-runner.service
+"""
+
+
+def select_profile(name):
+    """Select one explicit profile for this process; control remains compatible."""
+    global PROFILE, LOCAL, MANIFEST, KEY, KNOWN_HOSTS, SSH_CONFIG, VM, TEMPLATE, SMOKE, HEALTH_SCRIPT
+    PROFILE = PROFILES[name]
+    LOCAL = PROFILE.directory
+    MANIFEST, KEY = LOCAL / "state.json", LOCAL / "id_ed25519"
+    KNOWN_HOSTS, SSH_CONFIG = LOCAL / "known_hosts", LOCAL / "ssh_config"
+    VM, TEMPLATE, SMOKE = PROFILE.vm, PROFILE.template, PROFILE.smoke
+    HEALTH_SCRIPT = TARGET_HEALTH if name == "target" else CONTROL_HEALTH
 
 
 class LabError(Exception):
@@ -162,11 +203,14 @@ def ensure_private_path(path, *, directory=False):
 
 @contextmanager
 def workspace_lock():
-    if LOCAL.is_symlink():
+    root_state = ROOT / ".lab"
+    if root_state.is_symlink():
         raise LabError("Refusing a symlink at .lab.")
-    LOCAL.mkdir(mode=0o700, exist_ok=True)
+    root_state.mkdir(mode=0o700, exist_ok=True)
+    ensure_private_path(root_state, directory=True)
     ensure_private_path(LOCAL, directory=True)
-    lock_path = LOCAL / "lock"
+    LOCAL.mkdir(mode=0o700, exist_ok=True)
+    lock_path = root_state / "lock"
     ensure_private_path(lock_path)
     descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "w") as lock:
@@ -213,7 +257,8 @@ def load_state():
     ensure_private_path(MANIFEST)
     if not MANIFEST.exists():
         # Do not overwrite a key or enrollment left behind by a damaged manifest.
-        if any(path.name != "lock" for path in LOCAL.iterdir()):
+        reserved = {"lock", "target"} if PROFILE.name == "control" else set()
+        if any(path.name not in reserved for path in LOCAL.iterdir()):
             raise LabError("Local lab files exist without state.json; refusing ambiguous state.")
         return None
     try:
@@ -222,6 +267,7 @@ def load_state():
             state["schema"] == 1
             and state["workspace"] == str(ROOT)
             and state["vm_name"] == VM
+            and state.get("profile", "control") == PROFILE.name
             and re.fullmatch(r"[0-9a-f]{32}", state["owner"])
             and isinstance(state["created_here"], bool)
             and state["phase"] in {"prepared", "launching", "enrolled", "ready", "stopped"}
@@ -349,7 +395,8 @@ def configure_ssh(state, info):
     save_state(state)
 
 
-def check_ready(state, *, wait):
+def check_ready(state, *, wait, install=False):
+    """Inspect readiness; explicit lifecycle callers may install the target runner."""
     info = instance_info()
     if info["state"] != "Running":
         raise LabError(f"{VM} is {info['state']}; readiness is unavailable.")
@@ -365,16 +412,52 @@ def check_ready(state, *, wait):
             raise LabError(f"cloud-init is {cloud['status']}; the lab is not ready.")
     except (ValueError, KeyError, TypeError):
         raise LabError("Cannot establish cloud-init completion; the lab is not ready.") from None
-    guest("sh", "-s", label="Managed VM readiness", timeout=60, input_text=HEALTH_SCRIPT)
     configure_ssh(state, info)
+    if PROFILE.name == "target" and install:
+        install_runner(state)
+    guest("sh", "-s", label="Managed VM readiness", timeout=60, input_text=HEALTH_SCRIPT)
     run(
         ["ssh", "-F", SSH_CONFIG, VM, "sh -s"],
         label="Strict SSH readiness", timeout=60, input_text=HEALTH_SCRIPT,
     )
+    if PROFILE.name == "target":
+        check_runner_ready(wait=wait)
     state["phase"] = "ready"
     state["last_error"] = None
     save_state(state)
-    print(f"{VM}: ready at {state['last_ip']} (Ubuntu 24.04 ARM64, systemd, SSH, Docker/Compose, user manager).")
+    print(f"{VM}: ready at {state['last_ip']} (Ubuntu 24.04 ARM64, {PROFILE.summary}).")
+
+
+def check_runner_ready(*, wait):
+    """Probe the private RPC without allocating a shell or durable job."""
+    request = json.dumps({
+        "action": "health",
+        "owner": {"issuer": "sshmcp-lab", "subject": "readiness"},
+    }) + "\n"
+    deadline = time.monotonic() + (45 if wait else 10)
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            strict_ssh(
+                "XDG_RUNTIME_DIR=/run/user/$(id -u) "
+                "timeout --kill-after=1s 2s /usr/local/bin/sshmcp-runner rpc",
+                label="Target runner RPC readiness", timeout=min(10, remaining),
+                input_text=request,
+            )
+            return
+        except LabError:
+            if not wait:
+                break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(.2, remaining))
+    raise LabError(
+        "Native runner RPC is not ready; inspect the target's sshmcp-runner.service "
+        "user journal and durable storage, then retry target-up to finish installation or recovery."
+    )
 
 
 def prepare_state():
@@ -384,6 +467,7 @@ def prepare_state():
         "schema": 1,
         "workspace": str(ROOT),
         "vm_name": VM,
+        "profile": PROFILE.name,
         "owner": uuid.uuid4().hex,
         "phase": "prepared",
         "created_here": False,
@@ -400,7 +484,7 @@ def launch(state):
         raise LabError("A prior creation record exists but the VM is absent; inspect it manually before recreating anything.")
     primary = multipass("get", "client.primary-name", label="Multipass primary-instance check").strip()
     if not primary or primary == VM:
-        raise LabError("sshmcp-test must not be Multipass's primary instance (it can acquire an automatic home mount).")
+        raise LabError(f"{VM} must not be Multipass's primary instance (it can acquire an automatic home mount).")
     for path in (KEY, KEY.with_suffix(".pub")):
         ensure_private_path(path)
     if not KEY.exists() and not KEY.with_suffix(".pub").exists():
@@ -420,9 +504,9 @@ def launch(state):
     # A retry must inspect the named VM rather than issue a second launch.
     state["phase"] = "launching"
     save_state(state)
-    print(f"Creating {VM}: Ubuntu 24.04 ARM64, 2 CPUs, 4GB RAM, 40GB disk; first provisioning may take several minutes.", flush=True)
+    print(f"Creating {VM}: Ubuntu 24.04 ARM64, {PROFILE.cpus} CPUs, {PROFILE.memory} RAM, 40GB disk; first provisioning may take several minutes.", flush=True)
     multipass(
-        "launch", "24.04", "--name", VM, "--cpus", "2", "--memory", "4G", "--disk", "40G",
+        "launch", "24.04", "--name", VM, "--cpus", PROFILE.cpus, "--memory", PROFILE.memory, "--disk", "40G",
         "--cloud-init", str(cloud_init), "--timeout", "900",
         label="VM launch/provisioning", timeout=930,
     )
@@ -435,7 +519,7 @@ def start_owned(state, existing):
             state = prepare_state()
         launch(state)
     elif state is None:
-        raise LabError("sshmcp-test already exists without this workspace's creation record; refusing to adopt or start it.")
+        raise LabError(f"{VM} already exists without this workspace's creation record; refusing to adopt or start it.")
     else:
         vm_state = existing.get("state")
         if vm_state == "Stopped":
@@ -455,10 +539,10 @@ def start_owned(state, existing):
 
 def up(state, existing):
     state = start_owned(state, existing)
-    check_ready(state, wait=True)
+    check_ready(state, wait=True, install=True)
     if ensure_baseline(state):
         state = start_owned(state, inventory())
-        check_ready(state, wait=True)
+        check_ready(state, wait=True, install=True)
     return state
 
 
@@ -467,7 +551,7 @@ def down(state, existing):
         print(f"{VM}: absent; nothing to stop.")
         return
     if state is None:
-        raise LabError("sshmcp-test is not recorded as owned by this workspace; refusing to stop it.")
+        raise LabError(f"{VM} is not recorded as owned by this workspace; refusing to stop it.")
     vm_state = existing.get("state")
     if vm_state == "Stopped":
         print(f"{VM}: already stopped; disk retained. Guest identity and readiness cannot be checked while stopped.")
@@ -488,7 +572,7 @@ def status(state, existing):
         print(f"{VM}: absent; not ready.")
         return
     if state is None:
-        raise LabError("sshmcp-test exists but is unowned by this workspace; readiness is unverified.")
+        raise LabError(f"{VM} exists but is unowned by this workspace; readiness is unverified.")
     vm_state = existing.get("state")
     if vm_state != "Running":
         print(f"{VM}: {vm_state}; not ready. Guest identity cannot be verified without starting it.")
@@ -595,6 +679,70 @@ def strict_ssh(command, *, label, timeout, input_text=None, log_path=None):
         ["ssh", "-F", SSH_CONFIG, VM, command], label=label, timeout=timeout,
         input_text=input_text, log_path=log_path,
     )
+
+
+RUNNER_UNIT = """[Unit]
+Description=SSHMCP native execution runner
+[Service]
+ExecStart=/usr/local/bin/sshmcp-runner daemon --socket %t/sshmcp-runner.sock
+Restart=on-failure
+RestartSec=2
+KillMode=control-group
+TimeoutStopSec=45
+UMask=0077
+[Install]
+WantedBy=default.target
+"""
+
+
+def install_runner(state):
+    """Build and compare actual guest files, including after a baseline restore."""
+    if PROFILE.name != "target":
+        raise LabError("Runner installation requires the explicit target profile.")
+    binary = LOCAL / "sshmcp-runner"
+    ensure_private_path(binary)
+    run(["env", "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0", "go", "build", "-o", binary, "./cmd/sshmcp-runner"], label="Native ARM64 runner build", timeout=120)
+    binary.chmod(0o600)
+    digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+    unit_digest = hashlib.sha256(RUNNER_UNIT.encode()).hexdigest()
+    installed = strict_ssh(
+        'if test -f /usr/local/bin/sshmcp-runner && test -f "$HOME/.config/systemd/user/sshmcp-runner.service"; then '
+        'sha256sum /usr/local/bin/sshmcp-runner "$HOME/.config/systemd/user/sshmcp-runner.service"; fi',
+        label="Compare installed runner and service with current build", timeout=20,
+    ).splitlines()
+    if [line.split()[0] for line in installed] != [digest, unit_digest]:
+        script = """set -eu
+umask 077
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$XDG_RUNTIME_DIR/bus
+base64 -d > "$HOME/.sshmcp-runner.install" <<'RUNNER_BINARY'
+""" + base64.b64encode(binary.read_bytes()).decode() + """
+RUNNER_BINARY
+sudo -n install -o root -g root -m 0755 "$HOME/.sshmcp-runner.install" /usr/local/bin/sshmcp-runner
+rm -- "$HOME/.sshmcp-runner.install"
+mkdir -p -m 700 "$HOME/.config/systemd/user"
+cat > "$HOME/.config/systemd/user/sshmcp-runner.service" <<'UNIT'
+""" + RUNNER_UNIT + """UNIT
+systemctl --user daemon-reload
+systemctl --user enable sshmcp-runner.service
+systemctl --user restart sshmcp-runner.service
+systemctl --user is-active sshmcp-runner.service
+"""
+        strict_ssh("sh -s", label="Install changed target runner and private user service", timeout=60, input_text=script)
+    state["runner_installed"] = True
+    state["runner_sha256"] = digest
+    save_state(state)
+
+
+def reinstall_runner(state, existing):
+    if PROFILE.name != "target":
+        raise LabError("runner-install requires --profile target; the control VM is unchanged.")
+    if state is None or existing is None or state.get("baseline", {}).get("phase") != "ready":
+        raise LabError("runner-install requires the existing enrolled target and its ready baseline; run target up first.")
+    state = start_owned(state, existing)
+    configure_ssh(state, instance_info())
+    install_runner(state)
+    check_ready(state, wait=True)
 
 
 def run_workload(run_id, directory):
@@ -705,12 +853,12 @@ def test_lab(state, existing):
     try:
         state = start_owned(state, existing)
         identity_verified = True
-        check_ready(state, wait=True)
+        check_ready(state, wait=True, install=True)
         if ensure_baseline(state):
             identity_verified = False
             state = start_owned(state, inventory())
             identity_verified = True
-            check_ready(state, wait=True)
+            check_ready(state, wait=True, install=True)
         workload_attempted = True
         run_workload(run_id, directory)
     except (Exception, KeyboardInterrupt) as error:
@@ -747,7 +895,7 @@ def reset(state, existing):
         )
         state = start_owned(state, inventory())
         identity_verified = True
-        check_ready(state, wait=True)
+        check_ready(state, wait=True, install=True)
     except (Exception, KeyboardInterrupt) as error:
         primary = error
     finally:
@@ -760,8 +908,10 @@ def reset(state, existing):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("up", "down", "status", "test", "reset"))
+    parser.add_argument("command", choices=("up", "down", "status", "test", "reset", "runner-install"))
+    parser.add_argument("--profile", choices=tuple(PROFILES), default="control")
     arguments = parser.parse_args()
+    select_profile(arguments.profile)
     os.umask(0o077)
     state = None
     try:
@@ -771,7 +921,7 @@ def main():
         with interrupt_handling(), workspace_lock():
             state = load_state()
             existing = inventory()
-            {"up": up, "down": down, "status": status, "test": test_lab, "reset": reset}[arguments.command](state, existing)
+            {"up": up, "down": down, "status": status, "test": test_lab, "reset": reset, "runner-install": reinstall_runner}[arguments.command](state, existing)
     except (LabError, OSError) as error:
         print(f"Lab error: {error}", file=sys.stderr)
         return error.exit_code if isinstance(error, LabError) else 1

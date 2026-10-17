@@ -1,0 +1,55 @@
+#cloud-config
+# Baseline target: SSH + systemd + the separately installed native runner.
+# No Docker, application files, or host mounts are installed.
+users:
+  - default
+  - name: mcp-test
+    gecos: SSHMCP target administrator
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - @@PUBLIC_KEY@@
+ssh_pwauth: false
+disable_root: true
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - openssh-server
+write_files:
+  - path: /etc/sshmcp-lab/owner
+    owner: root:root
+    permissions: '0o600'
+    content: |
+      @@OWNER@@
+  - path: /etc/ssh/sshd_config.d/00-sshmcp-test.conf
+    owner: root:root
+    permissions: '0o644'
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+  - path: /usr/local/sbin/sshmcp-target-provision-v1
+    owner: root:root
+    permissions: '0o700'
+    content: |
+      #!/bin/sh
+      set -eu
+      . /etc/os-release
+      test "$ID:$VERSION_ID" = ubuntu:24.04
+      test "$(dpkg --print-architecture)" = arm64
+      if command -v docker >/dev/null 2>&1; then
+        printf 'Docker must be absent from the target baseline\n' >&2
+        exit 1
+      fi
+      install -d -m 0755 /run/sshd
+      /usr/sbin/sshd -t
+      systemctl enable --now ssh.service
+      systemctl restart ssh.service
+      loginctl enable-linger mcp-test
+      test_uid=$(id -u mcp-test)
+      systemctl start "user@${test_uid}.service"
+      printf '1\n' > /etc/sshmcp-lab/provisioned
+runcmd:
+  - [/usr/local/sbin/sshmcp-target-provision-v1]

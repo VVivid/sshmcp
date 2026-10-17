@@ -128,3 +128,77 @@ versioned fixture, and lifecycle/ownership rules in `tools/lab.py`. Updating a
 recipe does not repair an already provisioned VM. Preserve `.lab/` state and the
 recorded baseline, inspect `make lab-status` after interrupted operations, and
 review private result files before manual recovery.
+
+## Checkpoint 4: native execution foundation (2026-10-17)
+
+Implemented a separate explicit `target` profile and a native Go target runner.
+The default control profile and its original `.lab/` records remain compatible;
+the target uses `.lab/target/`. No control VM reset or payload change was made.
+The target's original clean snapshot is retained and never replaced. Target
+up/test/reset compare the actual guest binary and service hashes with the current
+ARM64 build and upgrade only when they differ, including after baseline restore.
+Status reports installed-service readiness without rebuilding.
+
+Checks actually run:
+
+- `python3 -m unittest discover -s tests -v`: 9 focused lab regression checks
+  passed, including stopped mount refusal for both profiles, cross-profile
+  manifest refusal, guest hash based upgrades, and pre-build symlink refusal.
+- Python syntax checks for both lab harnesses and the runner harness passed;
+  both shell smoke fixtures passed Bash syntax checks.
+- `go test -race ./... -count=1 -timeout=90s`: six focused native worker behavior
+  tests passed on the final local module (`sshmcp`), 17.047s. The helper test
+  executes real Bash workers in child processes; only the systemd launcher is
+  replaced locally. macOS required permission to bind local Unix sockets.
+- `go vet ./...` and `GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build` passed.
+- `python3 tests/integration_runner.py -v`: all 3 real Ubuntu/systemd/pinned-SSH
+  cases passed in 83.306s. They exercised persistent cwd/variables/functions,
+  isolation, separate output/cursors, 16 concurrently active jobs, busy/capacity
+  rejection, duplicate/conflict behavior, independent SIGINT cancellation,
+  command deadline, SSH client exit, an abrupt runner-daemon kill with automatic
+  restart, and an actual reboot of only `sshmcp-target`. Restart/reboot left
+  live jobs lost and retained keys without replaying their side effects.
+- After the final pipe-write/sync hardening and local module naming change,
+  `python3 tools/lab.py test --profile target` rebuilt/deployed by guest hash and
+  passed its current-build smoke. Private result:
+  `.lab/target/results/20261017T123613Z-test-1d3ea2207a1c4ed590c0936e1f0da5c6/`.
+  Workload, diagnostics, cleanup, and the final owned stop all succeeded.
+- Final read-only target checks showed 4 CPUs, 8,109,092 KiB guest memory,
+  a 42,949,672,960-byte root disk (`sda`), Docker absent, and a mode-0600 runner socket. The installed and recorded
+  current binary SHA256 matched:
+  `08df77c7a0c3895e2128adb90b308ecf8d377f8109b1307b2b504aea00e05caf`.
+- Every live runner case verified the original target baseline identity and
+  unchanged control manifest/key/pin/config contents, removed its own marker,
+  and stopped the target. Both named VMs were stopped after validation.
+
+The full three-case live harness preceded the final defensive pipe-write/sync
+hardening; the final code received the full focused race checks and a current
+build real target smoke afterward. MCP, OAuth, gateway behavior, detached Docker
+survival, and agent acceptance are later-checkpoint validation, not claimed by
+these results. Translation and independent Review are still required before the
+checkpoint is accepted.
+
+The CP4 readiness review corrections received the following additional checks:
+
+- Status no longer builds or installs a runner when its local installation flag
+  is missing or false. Only explicit up/test/reset/install paths request an
+  installation. The control profile retains its existing behavior.
+- Target readiness now requires a private, owner-bearing `health` RPC after the
+  installed-binary and active-service checks. This probe allocates no shell/job,
+  changes no durable records or timers, and rejects a fatal or closing engine.
+  Status makes one attempt with a 10-second host deadline; lifecycle readiness
+  polls for at most 45 seconds so startup recovery can finish before returning.
+- All 12 focused Python checks passed, including incomplete installation records,
+  an active service without available RPC, and bounded lifecycle polling. Python
+  syntax, both shell fixtures' syntax, and whitespace checks passed.
+- `go test -race ./... -count=1 -timeout=90s` passed in 17.025s with permitted
+  local Unix socket binding. The added transport check covers unavailable RPC,
+  required ownership, fatal engine refusal, and unchanged durable records.
+  `go vet ./...` and the Linux ARM64 build also passed.
+- One current-build real target smoke passed with the new readiness probe:
+  `.lab/target/results/20261017T130120Z-test-f7dd8c7bf45041a1983917b596ccf66f/`.
+  Workload, diagnostics, cleanup, and owned stop succeeded. Before/after checks
+  confirmed the original target baseline, target key/pin bytes, and control
+  manifest/key/pin/config bytes were preserved, and both VMs were stopped.
+
+The full crash/reboot harness was not repeated for these readiness corrections.
