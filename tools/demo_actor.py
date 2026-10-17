@@ -26,7 +26,7 @@ STREAM_LIMIT = 8 * 1024 * 1024
 DISABLED_FEATURES = (
     "shell_tool", "apps", "remote_plugin", "computer_use", "browser_use",
     "memories", "multi_agent", "hooks", "view_image", "code_mode",
-    "code_mode_host", "tool_suggest", "workspace_dependencies",
+    "tool_suggest", "workspace_dependencies",
 )
 
 
@@ -154,13 +154,15 @@ def catalog_paths(text):
 
 
 def isolated_arguments(directory, workspace):
-    options = []
+    # The installed CLI routes direct MCP calls through this transport host even
+    # when the model-visible Code Mode feature is disabled.
+    options = ["--enable", "code_mode_host"]
     for feature in DISABLED_FEATURES:
         options.extend(["--disable", feature])
     for key, value in {
         "agents.enabled": False, "memories.use_memories": False,
         "memories.generate_memories": False, "project_doc_max_bytes": 0,
-        "web_search": "disabled", "tools.view_image": False, "notify": [],
+        "web_search": "disabled", "notify": [],
     }.items():
         options.extend(["-c", key + "=" + json.dumps(value)])
     options.extend(["-C", str(workspace)])
@@ -225,7 +227,8 @@ def tool_body(result):
 def audit_transcript(path):
     """Require actual completed tool results and reject every host action."""
     calls, active, completed_jobs, submissions = [], set(), set(), {}
-    counts = {"tool_errors": 0, "runtime_errors": 0, "failed_jobs": 0, "duplicate_results": 0, "repeated_execute_keys": 0, "repeated_source_submissions": 0}
+    counts = {"tool_errors": 0, "runtime_errors": 0, "failed_jobs": 0, "duplicate_results": 0, "repeated_execute_keys": 0,
+              "repeated_source_submissions": 0, "closed_disconnects": 0, "lost_disconnects": 0}
     feedback, turn_completed, thread_ids = [], False, set()
     completed_ids, started_ids, failed_jobs = set(), set(), set()
     for event in transcript_events(path):
@@ -241,6 +244,11 @@ def audit_transcript(path):
         if not item:
             continue
         kind = item.get("type")
+        if kind == "error":
+            # CLI startup/configuration diagnostics are not model tool actions.
+            # Actual completed private MCP work is still required below.
+            counts["runtime_errors"] += int(event["type"] == "item.completed")
+            continue
         if kind not in {"agent_message", "reasoning", "mcp_tool_call"}:
             raise lab.LabError(f"Actor attempted a disallowed host action ({kind}); attempt rejected.")
         if kind != "mcp_tool_call":
@@ -268,9 +276,14 @@ def audit_transcript(path):
                 raise lab.LabError("Actor connect has no active result.")
             active.add(body["connection"]["connection_id"])
         elif tool == "disconnect":
-            if body.get("connection", {}).get("state") != "closed":
-                raise lab.LabError("Actor disconnect has no closed result.")
-            active.discard(arguments.get("connection_id"))
+            connection = body.get("connection", {})
+            state = connection.get("state")
+            # A successful disconnect preserves an already-cleaned lost shell's
+            # terminal state. It must still identify this call's idle shell.
+            if connection.get("connection_id") != arguments.get("connection_id") or state not in {"closed", "lost"} or connection.get("busy_job_id"):
+                raise lab.LabError("Actor disconnect has no matching idle terminal result.")
+            counts[state + "_disconnects"] += 1
+            active.discard(connection["connection_id"])
         else:
             job = body.get("job", {})
             if arguments.get("action") == "execute":
@@ -287,7 +300,7 @@ def audit_transcript(path):
                 failed_jobs.add(job["job_id"])
     counts["failed_jobs"] = len(failed_jobs)
     if not turn_completed or len(thread_ids) != 1 or not calls or not submissions or not completed_jobs or active or started_ids - completed_ids:
-        raise lab.LabError("Actor lacks a fresh completed session, completed remote work, or closed connections; exit status alone is insufficient.")
+        raise lab.LabError(f"Actor lacks a fresh completed session, completed remote work, or closed connections; {counts['runtime_errors']} runtime errors recorded; exit status alone is insufficient.")
     return {"thread_id": next(iter(thread_ids)), "tool_calls": len(calls), "completed_jobs": len(completed_jobs),
             "submissions": len(submissions), "human_interventions": 0, "feedback": feedback, **counts}
 

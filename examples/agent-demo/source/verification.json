@@ -1,0 +1,71 @@
+{
+  "checked_at": "2026-10-17T20:39:51.525608+00:00",
+  "trace_id": "c8806c24739d63ac2190b58a05b16b96",
+  "upstream_parent_id": "c634eebdccc9c5a6",
+  "probe": "verify-baf93505a71e",
+  "requests_sent": 31,
+  "counters_before": {
+    "hello_requests_total": 1.0,
+    "traefik_entrypoint_requests_total": 61.0
+  },
+  "counters_after": {
+    "hello_requests_total": 32.0,
+    "traefik_entrypoint_requests_total": 92.0
+  },
+  "spans": [
+    {
+      "service": "traefik",
+      "name": "ReverseProxy",
+      "kind": "SPAN_KIND_CLIENT",
+      "id": "5ae80c53e0687187",
+      "parent": "bc529945e02cd2cd"
+    },
+    {
+      "service": "traefik",
+      "name": "GET",
+      "kind": "SPAN_KIND_SERVER",
+      "id": "bc529945e02cd2cd",
+      "parent": "c634eebdccc9c5a6"
+    },
+    {
+      "service": "hello-go",
+      "name": "GET /",
+      "kind": "SPAN_KIND_SERVER",
+      "id": "70715725fcd74864",
+      "parent": "5ae80c53e0687187"
+    }
+  ],
+  "log_services": [
+    "hello-go",
+    "traefik"
+  ],
+  "dashboard_panels": {
+    "Application requests since process start": [
+      "32"
+    ],
+    "Proxy entrypoint requests since process start": [
+      "92"
+    ],
+    "Application requests in selected range": [
+      "144.79172733011742"
+    ],
+    "Proxy requests in selected range": [
+      "157.58785528780092"
+    ],
+    "Application request rate": [
+      "0.3059729238566831"
+    ],
+    "Proxy request rate": [
+      "0.2869839723799668"
+    ],
+    "Application p95 latency": [
+      "0.00475"
+    ],
+    "Proxy p95 latency": [
+      "0.00475"
+    ]
+  },
+  "log_to_trace_link": "validated for both log bodies and Tempo datasource",
+  "configuration": "three services; loopback ports; one generic app endpoint; restart policies; private credential file",
+  "boot_id": "ac17984b-073c-4b38-a9d4-ce83091e198a"
+}

@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "run_id": "c94c230b79564965bf98acd9600e7427",
+  "primary_export": [
+    {
+      "path": ".gitignore",
+      "original_sha256": "0000f51381f260ebeaf415679f713b7db56f6e5af960ffab293719cc2915cf0d",
+      "export_sha256": "0000f51381f260ebeaf415679f713b7db56f6e5af960ffab293719cc2915cf0d",
+      "redacted": false
+    },
+    {
+      "path": "README.md",
+      "original_sha256": "b289261c5c94071d187630ca13af2afd86aca33b9d700d14ac7602d8b6d774e8",
+      "export_sha256": "b289261c5c94071d187630ca13af2afd86aca33b9d700d14ac7602d8b6d774e8",
+      "redacted": false
+    },
+    {
+      "path": "compose.yaml",
+      "original_sha256": "a8400c30158fa6babd04ea73b692454a7835c2e21daca827ea910f4c7935f17b",
+      "export_sha256": "a8400c30158fa6babd04ea73b692454a7835c2e21daca827ea910f4c7935f17b",
+      "redacted": false
+    },
+    {
+      "path": "demo-traffic.sh",
+      "original_sha256": "6a5e1f9ae7efe5a8f1076ec1cce8ab8851262b76d76191554957fd4b8cdb4d65",
+      "export_sha256": "6a5e1f9ae7efe5a8f1076ec1cce8ab8851262b76d76191554957fd4b8cdb4d65",
+      "redacted": false
+    },
+    {
+      "path": "deploy.sh",
+      "original_sha256": "19c4ba7ea8a37aa01a682c1c1f39c539c9bf15e7743436b035c6cfabe1f74aac",
+      "export_sha256": "19c4ba7ea8a37aa01a682c1c1f39c539c9bf15e7743436b035c6cfabe1f74aac",
+      "redacted": false
+    },
+    {
+      "path": "otelcol.yaml",
+      "original_sha256": "40063eaa7919477fcf8cacbecbb72258527d4ba54111edc270d6518bc0f160c0",
+      "export_sha256": "40063eaa7919477fcf8cacbecbb72258527d4ba54111edc270d6518bc0f160c0",
+      "redacted": false
+    },
+    {
+      "path": "probe.json",
+      "original_sha256": "8fba0899c0c7a141cae5e2930a20c0da5c558348cea837f6e013d38903557070",
+      "export_sha256": "8fba0899c0c7a141cae5e2930a20c0da5c558348cea837f6e013d38903557070",
+      "redacted": false
+    },
+    {
+      "path": "routes.yaml",
+      "original_sha256": "abefa9e0804f1eee3a3efce8ea2411c045e73879511b0e87c430957417457ea2",
+      "export_sha256": "abefa9e0804f1eee3a3efce8ea2411c045e73879511b0e87c430957417457ea2",
+      "redacted": false
+    },
+    {
+      "path": "traefik.yaml",
+      "original_sha256": "82750a6ef4ff8b99ddb26f8a84881603d3b85f055836264ec840477defc423a0",
+      "export_sha256": "82750a6ef4ff8b99ddb26f8a84881603d3b85f055836264ec840477defc423a0",
+      "redacted": false
+    },
+    {
+      "path": "verification-before-reboot.json",
+      "original_sha256": "7eadaf0e71919e20b0b6d77f3ec6b05ab27bee1fedf02519c75db53100fc859f",
+      "export_sha256": "7eadaf0e71919e20b0b6d77f3ec6b05ab27bee1fedf02519c75db53100fc859f",
+      "redacted": false
+    },
+    {
+      "path": "verification-persistence.json",
+      "original_sha256": "c04f3a06823c1a5416fbb1ec162d1614d74f0131b4c7cc05e8edb40cbbc263a0",
+      "export_sha256": "c04f3a06823c1a5416fbb1ec162d1614d74f0131b4c7cc05e8edb40cbbc263a0",
+      "redacted": false
+    },
+    {
+      "path": "verification.json",
+      "original_sha256": "84bec30e64253270e4f3c7e361f78b764248e550f2caf455fb3222d2bf1440c6",
+      "export_sha256": "84bec30e64253270e4f3c7e361f78b764248e550f2caf455fb3222d2bf1440c6",
+      "redacted": false
+    },
+    {
+      "path": "grafana/dashboards/hello.json",
+      "original_sha256": "0681442eb0984d898cd6f53e73a675d8e8ff10e5dc188ea88b05758737dc212a",
+      "export_sha256": "0681442eb0984d898cd6f53e73a675d8e8ff10e5dc188ea88b05758737dc212a",
+      "redacted": false
+    },
+    {
+      "path": "grafana/provisioning/dashboards/demo.yaml",
+      "original_sha256": "7dee0101d634adaf29c03a189d61158b634c95981d36b995e11aa6b780d37106",
+      "export_sha256": "7dee0101d634adaf29c03a189d61158b634c95981d36b995e11aa6b780d37106",
+      "redacted": false
+    },
+    {
+      "path": "grafana/provisioning/datasources/demo.yaml",
+      "original_sha256": "7a2601d9503217ce215b54121d7e559c204e4a4c276e0aa3754269e3029e98d4",
+      "export_sha256": "7a2601d9503217ce215b54121d7e559c204e4a4c276e0aa3754269e3029e98d4",
+      "redacted": false
+    },
+    {
+      "path": "app/.dockerignore",
+      "original_sha256": "4ae89d02076995a7264f1ef33713a163ee26838bfdad27df0d849b29b3c725eb",
+      "export_sha256": "4ae89d02076995a7264f1ef33713a163ee26838bfdad27df0d849b29b3c725eb",
+      "redacted": false
+    },
+    {
+      "path": "app/Dockerfile",
+      "original_sha256": "61e45dee6968f6e328b654d0e4c32afe0c8f55f0b62ae3c71934ec0d6edee8b1",
+      "export_sha256": "61e45dee6968f6e328b654d0e4c32afe0c8f55f0b62ae3c71934ec0d6edee8b1",
+      "redacted": false
+    },
+    {
+      "path": "app/go.mod",
+      "original_sha256": "e3d7239a06c21d3a2b6231e32f5561dd0ca89a0681fd328fe8a9e4a65bb4eb60",
+      "export_sha256": "e3d7239a06c21d3a2b6231e32f5561dd0ca89a0681fd328fe8a9e4a65bb4eb60",
+      "redacted": false
+    },
+    {
+      "path": "app/go.sum",
+      "original_sha256": "d27b2722f0a7171eceee5e5837501f4908235053b3a905a08b5b20b085cdb228",
+      "export_sha256": "d27b2722f0a7171eceee5e5837501f4908235053b3a905a08b5b20b085cdb228",
+      "redacted": false
+    },
+    {
+      "path": "app/main.go",
+      "original_sha256": "8e9e4364a25710fa9d934879bd8433e80502b6445321dc1a4b787fd6d2cb92fd",
+      "export_sha256": "8e9e4364a25710fa9d934879bd8433e80502b6445321dc1a4b787fd6d2cb92fd",
+      "redacted": false
+    }
+  ],
+  "supplemental_export": [
+    {
+      "path": "verify.py",
+      "original_sha256": "9a9f79b2fb58a3c66710f5decf5d54f85312995e5d35e028548252b518afcc0c",
+      "export_sha256": "9a9f79b2fb58a3c66710f5decf5d54f85312995e5d35e028548252b518afcc0c",
+      "redacted": false,
+      "collection": "post-run bounded read-only MCP operator",
+      "size_bytes": 6839
+    }
+  ],
+  "note": "File contents preserve actual agent-created source/configuration. Private .env credentials, binary/cache/data output are excluded. Shell-script modes are normalized executable; original modes were not captured."
+}

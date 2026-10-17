@@ -1,8 +1,10 @@
 # Lab validation
 
-This validates the reusable SSH/Docker infrastructure. There is no MCP application
-or current application build deployed in this VM. Both checkpoint 3 security cases
-passed, followed by a successful repeat `make lab-test`. The VM was left stopped.
+The opening sections record the original reusable SSH/Docker infrastructure
+validation: both checkpoint 3 security cases passed, followed by a successful
+repeat `make lab-test`, and the control VM was left stopped. Later sections
+record the native runner, private MCP, and actual checkpoint-7 application
+exercise. The accepted demo is currently running on its separate target VM.
 
 ## Reading order
 
@@ -599,3 +601,282 @@ It independently passed all 49 host tests, Python/shell syntax, whitespace,
 and Go race/vet checks (race results cached), inspected the saved benchmark,
 isolation and preservation evidence, and checked the pinned Prometheus type-label
 contract. No dedicated Tester or deployment/model operation was used for CP6.
+
+## Checkpoint 7 builder launch and audit corrections (2026-10-17)
+
+The first explicit target-only reset passed before the first real deployment
+attempt. That attempt failed at actor launch: the installed CLI reported
+`code-mode host is disabled`, exposed no usable private tools, and completed
+zero MCP calls in 13.791s. The earlier audit incorrectly described its CLI
+diagnostic item as a disallowed host action. The narrow correction keeps the
+required transport host enabled while model-visible Code Mode and host tools
+remain disabled, removes the locally ignored image-setting override, and counts
+runtime diagnostics while still requiring completed private MCP work. A separate
+fresh read-only CLI preflight then completed direct connect, execute, status, and
+disconnect calls in 15.021s, with no tool/runtime errors. The initialized CLI
+catalog independently exposed exactly the private three tools; disabled server
+entries had empty tool maps. One initial catalog-probe assertion incorrectly
+assumed disabled servers disappear; its failed result and corrected verification
+are both retained. No target/model action occurred in that catalog probe.
+
+After another explicit target-only reset, the second fresh deployment actor
+finished in 550.269s with 92 completed MCP calls. Its 32 jobs included 27 completed,
+four failed, and one lost. The lost command used Bash `set -e` around a Dockerized
+Go dependency operation that failed because Docker-bridge DNS refused
+`proxy.golang.org`. Loss of the persistent shell/control channel is consistent
+with the documented Bash option semantics. The actor recovered independently;
+its later self-initiated reboot also left an idle connection `lost/runner_stopped`.
+The exact failed command, output, and lost-job metadata are retained privately.
+
+The second attempt was still rejected before independent evaluation because
+the audit demanded `closed` for successful disconnects of those two already-lost
+connections. The runner deliberately preserves an already-cleaned terminal
+state. The corrected audit requires a successful response for the same
+connection ID, `closed` or `lost`, and no busy job; it counts both terminal
+outcomes. Active, unknown, mismatched, busy, and errored cleanup results remain
+insufficient. No runner behavior was changed. This correction does not change
+the failed status of either prior attempt. Both attempts saved diagnostics and
+stopped both VMs with no cleanup errors; neither reached independent deployment,
+controlled-fault, or repair evaluation. Source/config from attempt two was
+exported privately during failure diagnostics. Actor claims and its own
+verification files are not independent acceptance evidence.
+
+Private evidence:
+
+- First reset: `.lab/results/20261017T162519Z-demo-reset-8147faf914f24493aa32ae817aa5b9c4/`.
+- First failed attempt: `.lab/results/20261017T162617Z-demo-test-6f4610ccae2442b5b75ddfe7bf833202/`.
+- Read-only CLI preflight: `.lab/results/20261017T163159Z-cp7-cli-preflight-326887f240c04a208cab5f7c2bb26e24/`.
+- Actual initialized catalog: `.lab/results/20261017T163250Z-cp7-catalog-probe-0ebd9653dbbb492fa24a3a32d07e1d8c/`.
+- Second reset: `.lab/results/20261017T163333Z-demo-reset-e881e4f9c08848dd8262ed39fc72dcd3/`.
+- Second failed attempt: `.lab/results/20261017T163425Z-demo-test-30e09ee532054406be39f7a2a01372c5/`.
+
+The first and second warmed sixteen-job benchmarks passed in 2.151320s and
+2.158705s respectively, with zero transport errors or automatic retries. Hash-only
+records in `.lab/demo/cp7-*.json` preserve comparisons against the protected CP6
+records. Successful in-run human guidance remains separate from these explicit
+across-attempt developer corrections and the standalone preflight. Fresh reset
+and a new unchanged-goal attempt are required for acceptance; no failed actor is
+continued or coached.
+
+## Checkpoint 7 live counter and dashboard checker corrections (2026-10-17)
+
+The third explicit target-only reset preceded another fresh, unchanged-goal
+deployment. Its warmed sixteen-job benchmark passed in 2.133768s with zero
+transport errors. The deployment actor completed in 580.483s with 89 completed
+tool calls, 23 completed jobs, four failed jobs, one lost job, and two tool errors.
+It returned four closed and one already-lost idle disconnect. Reused execute
+keys, exact repeated source submissions, and duplicate results were all zero;
+the recorded failed/lost/tool errors still required independent actor recovery.
+The corrected tool audit passed. Independent counter-baseline evaluation then
+failed, retaining actual backend observations and stopping both VMs cleanly:
+`.lab/results/20261017T165105Z-demo-test-b34a2d8020154c3083105d62a65178b1/`.
+No controlled fault or troubleshooting actor ran in that attempt.
+
+Typed discovery returned genuine application and proxy counters, but the
+freshness join returned no rows. Pinned [Prometheus v3.15 timestamp code](https://github.com/prometheus/prometheus/blob/v3.15.0/promql/functions.go)
+drops reserved metadata labels, leaving the counter's `__type__` unmatched on
+the timestamp side. A separate read-only diagnostic against the preserved
+deployment confirmed the actual mismatch: the original join returned zero
+rows, while `and ignoring(__type__,__unit__)` returned the real counter sum `3`.
+Future-cutoff, historical-stale, and unrelated-service controls all returned zero
+rows; the unfiltered historical selector itself returned two rows. Both VMs
+stopped cleanly. Raw query evidence:
+`.lab/results/20261017T171017Z-cp7-counter-diagnostic-d7fcb12f339c430197c6572a81e81bf7/`.
+
+The evaluator now ignores only those reserved metadata labels at the freshness
+join. Typed/service-scoped selectors, underlying sample cutoff, and the full
+independent request-burst delta remain required. Request-byte volume counters
+are also excluded by metric name or byte unit; they cannot stand in for request
+counts. Existing counter regressions were expanded rather than adding another
+test suite.
+
+A full positive checker diagnostic against the unchanged old deployment then
+proved fresh HTTP, trace ancestry, twelve correlated Go logs, matching proxy
+logs, and both genuine request counters increasing exactly `3 -> 15`. It failed
+later because a dashboard's valid `$__range` macro was sent literally to
+Prometheus (HTTP 400). Its saved dashboard also had two Loki log panels using
+`${probe}`, an explicitly declared textbox with empty current value. Evidence:
+`.lab/results/20261017T171315Z-cp7-positive-checker-diagnostic-23bc6d57405a419f95bee849e2b46a4d/`.
+That diagnostic remains failed.
+
+Dashboard probes now render whole standard time-macro names in an explicit
+five-minute context and resolve only declared empty textbox defaults. Numeric
+forms are handled without prefix substitution; undeclared, nonempty, multivalue,
+and non-textbox defaults remain unsupported and fail clearly. This follows
+[Grafana's global-variable contract](https://grafana.com/docs/grafana/latest/visualizations/dashboards/variables/global-variables/).
+The existing dashboard regression covers these positive and negative cases.
+All fourteen saved dashboard targets resolved locally before a new live check.
+All 52 host tests, Python syntax, and whitespace checks passed.
+
+The subsequent full positive checker diagnostic passed on the unchanged old
+application: both genuine request counters again increased `3 -> 15`, the fresh
+trace had actual proxy-to-Go ancestry, twelve Go logs correlated to that trace,
+the proxy JSON log contained the probe, and requests, latency, both log streams,
+and trace navigation all passed dashboard checks. Both VMs stopped with empty
+cleanup errors. Evidence:
+`.lab/results/20261017T172130Z-cp7-positive-checker-diagnostic-0ff1dacf870845c191dcea38c11865bd/`.
+These developer diagnostics ran no model, application modification, controlled
+fault, or repair actor. They do not make any prior attempt accepted. The next
+acceptance attempt still requires explicit reset and fresh unchanged-goal actors.
+
+The fourth fresh attempt's deployment audit passed, with 104 completed tool
+calls, 30 completed jobs, five failed jobs, two lost jobs, and two tool errors.
+Two disconnects returned closed and three returned already-lost idle terminal
+states. The independent positive probes proved actual trace ancestry, twelve
+correlated Go logs, matching proxy JSON, and genuine application/proxy request
+counters each increasing `30 -> 42`. The dashboard checker then rejected valid
+`${probe:raw}` interpolation. This failed attempt remains preserved and both VMs
+stopped with empty cleanup errors:
+`.lab/results/20261017T172414Z-demo-test-4f5d7baa64404044a5ca59dbb4e5d970/`.
+
+Inspection of all eleven actual dashboard targets found seven standard
+`$__rate_interval` forms and two `${probe:raw}` forms; datasource UIDs were literal
+`prometheus` and `loki`, with no datasource variables. The only declared variable
+was a textbox named `probe` with scalar current value `.*`. Its two Loki targets
+used that value as a regex. [Grafana's raw-format contract](https://grafana.com/docs/grafana/latest/visualizations/dashboards/variables/variable-syntax/#raw)
+preserves the value without datasource formatting. The checker now implements
+that explicit scalar textbox raw case with a 4 KiB value bound, preserving empty
+defaults and whole-name time macros. Unknown, missing, non-string, multivalue,
+oversized, and unsupported-format values still fail clearly. Replacement uses
+the matched variable and a callback so raw backslashes and variable-like literal
+text remain verbatim. The existing dashboard regression covers these boundaries;
+no application code or saved dashboard was modified.
+
+All eleven saved targets then resolved locally. All 52 host tests, syntax, and
+whitespace checks passed. A separate full positive checker diagnostic on the
+unchanged fourth-attempt deployment verified every original exported source
+hash, both genuine request counters `3 -> 15`, actual proxy-to-Go ancestry,
+twelve correlated Go logs, matching proxy JSON, and all five dashboard checks.
+It ran no model, application modification, or controlled fault, and stopped
+both VMs with empty cleanup errors after 35.022s. Evidence:
+`.lab/results/20261017T174417Z-cp7-positive-checker-diagnostic-17fed894669c4f339dc8db9deaae3323/`.
+The fourth acceptance attempt remains failed; the next attempt requires a fresh
+explicit reset and new unchanged-goal actors.
+
+## Checkpoint 7 usage-limit interruption and continuation (2026-10-17)
+
+The fifth fresh unchanged-goal deployment was interrupted by the installed CLI's
+account usage limit after 518.863s, with exit 1 and a failed turn. Its partial
+transcript contains 82 completed MCP calls, 24 completed jobs, four failed jobs,
+one lost job, and one last observed accepted job; there were no tool errors.
+These are partial-transcript observations, not a successful actor audit. Its
+warmed sixteen-job benchmark passed in 2.156783s. Independent deployment
+evaluation, controlled fault, and fresh repair did not run. The failed result,
+private partial transcript/source export, and diagnostics remain preserved:
+`.lab/results/20261017T174618Z-demo-test-2964cb78279f467aab22eb352839b6bb/`.
+Both VMs stopped with empty cleanup errors, and the resumed Builder found no
+remaining actor or forwarding process.
+
+At the user's continuation boundary, the stored Codex account file's raw hash
+differed from the earlier attempt. No credentials or global account/model
+settings were changed by the resumed Builder; raw-file hashes cannot distinguish
+token rotation from user reauthentication. The new private preservation record
+establishes the current account-identity hash as a continuation baseline. All
+management keys, host pins, account fixture/global configuration bytes, ownership,
+and recorded baselines still match the original CP7 preservation record.
+The subsequent explicit target-only reset passed and retained all failed-run
+evidence:
+`.lab/results/20261017T202427Z-demo-reset-d41781b2759242cd8b688337cbf95121/`.
+
+## Checkpoint 7 actual deployment, fault, and repair (2026-10-17)
+
+The sixth fresh unchanged-goal exercise passed in 900.061s, with no primary or
+cleanup errors. Both owned VMs and the private demo were left running. Evidence:
+`.lab/results/20261017T202530Z-demo-test-c94c230b79564965bf98acd9600e7427/`.
+The successful ready pointer identifies that run. The five earlier attempts
+remain failed; no diagnostic retroactively changes their status.
+
+The deployment actor completed in 562.666s using 90 MCP calls and 30 submitted
+jobs: 23 completed, five failed, and two lost. It recovered independently after
+those failures and shell losses. The separate repair actor completed in
+116.817s using 25 MCP calls and nine completed jobs, with no failed/lost jobs.
+Both actors had zero tool/runtime errors, duplicate results, repeated execute
+keys, and exact repeated source submissions. Their session IDs differ, and both
+prompt-isolation audits passed. The repair prompt was exactly the single
+sentence documented in `DEMO.md`. In-run human guidance was zero; the engineering
+corrections between earlier attempts are separate and remain documented above.
+
+Independent deployment checks passed fresh proxy-to-Go ancestry, twelve
+trace-correlated Go logs, the matching Traefik JSON log, and all five dashboard
+checks. The genuine Go and proxy counters each increased `35 -> 47` after twelve
+requests. The operator changed only the application's generic OTLP endpoint and
+recreated only that container. Over the complete 120-second fault window, fresh
+Go spans/logs stayed zero and its counter stayed `47 -> 47`, while HTTP, matching
+proxy logs, and 24 fresh proxy spans remained available. After fresh-agent repair,
+new ancestry/log/dashboard checks passed again; the Go counter increased
+`35 -> 47` and proxy counter `95 -> 107` after twelve new requests.
+
+The warmed sixteen-job `sleep 2` benchmark passed in 2.136538s, with all guest
+execution intervals overlapping. Its 628 real MCP calls had median/p95/max
+latencies 0.004219/0.065954/0.128671s. Warm command median/max were
+0.145786/0.155272s. Transport errors and automatic transport retries were zero;
+this does not erase the actor's independent failure recovery. Actor JSONL does
+not provide comparable per-call timing.
+
+One separate bounded, read-only observation inspected the fixed gateway/runner
+services while buffered actor output appeared delayed. Both were active; it
+inspected no application files, changed no service, and provided no agent
+guidance. Private evidence:
+`.lab/results/20261017T203534Z-cp7-active-infrastructure-observation-670de560a0c34105b2da0005560873d6/`.
+
+The [actual-source snapshot and report](../examples/agent-demo/README.md) contain
+twenty unchanged primary export files plus the actor's actual `verify.py`.
+That script was collected afterward through a separate bounded read-only MCP
+operator, with no application change:
+`.lab/results/20261017T204409Z-cp7-supplemental-source-aca5f4e1508e4f33b6462e7a221f3330/`.
+The combined manifest distinguishes primary and supplemental collection and
+records original/export hashes. All 21 published contents match the original
+agent-created bytes; known credentials are absent. Original private exports and
+reports are unchanged. Private Grafana access notes are only in the gitignored
+`.lab/demo/access.json`, mode `0600`. The source and verification reports remain
+actor artifacts; independent acceptance uses separate operator/backend evidence.
+
+Post-run preservation checks match all protected management/configuration bytes,
+ownership, host pins, and baselines against the original CP7 record. The account
+identity matches the new continuation baseline; its raw auth file differs from
+the pre-continuation record as disclosed above. Evidence:
+`.lab/demo/cp7-attempt6-after.json`.
+No deployment, Compose configuration, or Go source was hand-rewritten for export.
+Modern Go guidance was read for both the repository's Go 1.26 and the actual
+export's declared Go 1.25 before copying the source snapshot.
+
+All 52 host tests passed before the exercise. Artifact hashes, JSON/Python
+syntax, shell syntax, and whitespace were checked after packaging. Independent
+demo down/up, fresh telemetry after resume, and live runtime privacy are reserved
+for the later dedicated Tester. Fresh Translation, final validation, Tester,
+and Review remain required before the checkpoint's workflow can complete.
+
+## Checkpoint 7 final validation and independent Tester (2026-10-17)
+
+Fresh Translation returned a factual report correction: the catalog had one
+enabled server containing three tools, while one report field counted only one
+tool. A fresh Builder corrected that field against the raw catalog; original
+catalog, source, and provenance bytes remained unchanged. Fresh Translation
+then completed without edits or unresolved readability issues.
+
+Coordinator final checks passed all 52 host tests (0.334s), Python AST/JSON/shell
+syntax, Go formatting, cached Go race tests, vet, both Linux ARM64 builds, and
+whitespace checks. These checks made no runtime or application changes.
+
+The dedicated independent Tester passed actual down (9.465s), observed both VMs
+stopped with empty mounts, and passed up (75.021s). Its separate fresh post-resume
+probe proved span ancestry, twelve correlated Go logs, proxy JSON logs, Go/proxy
+counters 18 → 30, and all five dashboard checks. Pre-stop trace/log/counter
+history, the same container IDs and named volumes, 23 private captured hashes,
+and 21 public source hashes were preserved. Live privacy, ARM64 images,
+instrumentation, protected keys/configuration/identities, and private credential
+permissions passed. The current raw account hash matched the continuation
+baseline; its earlier difference remains disclosed above.
+
+With the application stack running, all sixteen warmed two-second jobs
+overlapped and drained in 2.169478s. The benchmark recorded 634 MCP calls,
+zero transport errors/retries, and sixteen closed connections. Historical actor,
+exact-prompt, isolation, and fault records were independently audited separately
+from these newly executed checks. Tester-only capture corrections are retained;
+no application change, reset, redeployment, fault reinjection, or model actor
+was introduced by the Tester.
+
+Private evidence:
+`.lab/results/20261017T210215Z-cp7-independent-tester-206c830dfb5b40c7b14dc2ae5f125d73/`.
+Both VMs and the demo remain running. Independent Review and the dedicated CP7
+commit are the remaining workflow gates.

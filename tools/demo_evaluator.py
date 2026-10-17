@@ -119,6 +119,28 @@ def numeric_result(document):
     )
 
 
+def dashboard_expression(expression, textboxes):
+    """Render the bounded five-minute dashboard context used by these probes."""
+    values = {"__range": "5m", "__range_s": "300", "__range_ms": "300000",
+              "__rate_interval": "5m", "__rate_interval_ms": "300000",
+              "__interval": "1m", "__interval_ms": "60000"}
+
+    def replace(match):
+        name, format_name = match.group(1) or match.group(3), match.group(2)
+        if name in values and format_name is None:
+            return values[name]
+        if name in textboxes and (format_name == "raw" or (format_name is None and textboxes[name] == "")):
+            # Grafana's raw format deliberately preserves the scalar text,
+            # including regular-expression syntax, without datasource escaping.
+            return textboxes[name]
+        raise lab.LabError(f"Dashboard query uses unsupported variable {match.group(0)}; only bounded time macros, declared empty textbox defaults, and declared scalar textbox raw values are supported.")
+
+    variables = re.compile(r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(?::([A-Za-z_][A-Za-z0-9_]*))?\}|([A-Za-z_][A-Za-z0-9_]*))")
+    if "${" in variables.sub("", expression):
+        raise lab.LabError("Dashboard query uses unsupported formatted variable syntax; inspect the saved dashboard query.")
+    return variables.sub(replace, expression)
+
+
 class Evaluator:
     def __init__(self, directory, *, username, password, wait=EXPORT_WAIT):
         self.directory = directory
@@ -199,7 +221,9 @@ class Evaluator:
             # An instant query's aggregate timestamp is the query time, not the
             # last exporter sample time. Filter the underlying series before
             # summing, so a pre-recreation counter cannot become a baseline.
-            selector = "(" + selector + ") and (timestamp(" + selector + ") >= " + str(after_ns / 1_000_000_000) + ")"
+            # timestamp() drops reserved type/unit labels. Ignore only those
+            # metadata labels when matching each counter to its sample age.
+            selector = "(" + selector + ") and ignoring(__type__,__unit__) (timestamp(" + selector + ") >= " + str(after_ns / 1_000_000_000) + ")"
         document = self.backend("prometheus", "/api/v1/query", {"query": "sum(" + selector + ")"})
         if document.get("status") != "success":
             raise lab.LabError("Prometheus rejected the independent counter query.")
@@ -227,6 +251,10 @@ class Evaluator:
                 metric = result.get("metric", {})
                 name = metric.get("__name__", "")
                 if name.endswith("_count") or metric.get("__type__") != "counter":
+                    continue
+                # Request-byte volume is a counter too, but cannot prove how
+                # many requests passed through the application or proxy.
+                if "byte" in name.lower() or metric.get("__unit__", "").lower() in {"by", "byte", "bytes"}:
                     continue
                 labels = {key: value for key, value in metric.items() if key in {"job", "service_name", "service"} and (value == service or value.endswith("/" + service))}
                 if not labels:
@@ -267,6 +295,11 @@ class Evaluator:
         for item in dashboard_ids:
             uid = urllib.parse.quote(item["uid"], safe="")
             dashboard = self.json("/api/dashboards/uid/" + uid)["dashboard"]
+            textboxes = {}
+            for entry in dashboard.get("templating", {}).get("list", []):
+                value = (entry.get("current") or {}).get("value")
+                if entry.get("type") == "textbox" and isinstance(value, str) and len(value.encode()) <= 4096:
+                    textboxes[entry.get("name")] = value
             for panel in panels(dashboard.get("panels", [])):
                 for target in panel.get("targets", []):
                     source = target.get("datasource", panel.get("datasource", {}))
@@ -276,12 +309,13 @@ class Evaluator:
                         request_query = any(counter["name"] in expression for counter in counters.values())
                         latency_query = bool(re.search("duration|latency", expression, re.I))
                         if request_query or latency_query:
-                            query = expression.replace("$__rate_interval", "5m").replace("$__interval", "1m")
+                            query = dashboard_expression(expression, textboxes)
                             response = self.backend("prometheus", "/api/v1/query", {"query": query})
                             checks["requests"] |= request_query and numeric_result(response)
                             checks["latency"] |= latency_query and numeric_result(response)
                     if source_uid == self.sources["loki"]["uid"] and expression and panel.get("type") == "logs":
-                        response = self.backend("loki", "/loki/api/v1/query_range", {"query": expression, "start": probe["started_ns"] - 5_000_000_000,
+                        query = dashboard_expression(expression, textboxes)
+                        response = self.backend("loki", "/loki/api/v1/query_range", {"query": query, "start": probe["started_ns"] - 5_000_000_000,
                                                                                    "end": time.time_ns(), "limit": 100})
                         # A populated generic log panel is insufficient: its
                         # actual returned streams must include both services.

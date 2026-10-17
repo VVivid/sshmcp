@@ -25,6 +25,25 @@ lab = demo.lab
 
 
 class ActorBoundaryTest(unittest.TestCase):
+    def test_launch_keeps_mcp_transport_host_without_model_code_or_host_tools(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+
+            def capture(command, directory, name, **kwargs):
+                value = [{"name": "sshmcp-private", "enabled": True}] if name.endswith("mcp-inventory") else []
+                (directory / (name + ".jsonl")).write_text(json.dumps(value))
+                return {"exit_code": 0}
+
+            with patch.object(actor, "capture", side_effect=capture), \
+                 patch.object(actor.mcp_lab, "codex_arguments", side_effect=lambda *args: ["codex", *args]):
+                arguments = actor.isolated_arguments(folder, folder)
+            pairs = list(zip(arguments, arguments[1:]))
+            self.assertIn(("--enable", "code_mode_host"), pairs)
+            for feature in ("code_mode", "shell_tool", "apps", "computer_use", "browser_use", "view_image"):
+                self.assertIn(("--disable", feature), pairs)
+            self.assertNotIn(("--disable", "code_mode_host"), pairs)
+            self.assertFalse(any(argument.startswith("tools.view_image=") for argument in arguments))
+
     def test_skill_aliases_expand_to_exact_files_and_unresolved_aliases_fail(self):
         text = '- `r0` = `/private/skills`\n- example (file: r0/example/SKILL.md)'
         self.assertEqual(actor.catalog_paths(text), ["/private/skills/example/SKILL.md"])
@@ -44,7 +63,7 @@ class ActorBoundaryTest(unittest.TestCase):
             events.append(call("3", "run_command", {"action": "status", "job_id": "job"}, {"job": {"job_id": "job", "state": "completed", "exit_code": 0}}))
         if host_action:
             events.append({"type": "item.completed", "item": {"type": "command_execution", "command": "ssh target"}})
-        events.extend([call("4", "disconnect", {"connection_id": "shell"}, {"connection": {"state": "closed"}}), {"type": "turn.completed"}])
+        events.extend([call("4", "disconnect", {"connection_id": "shell"}, {"connection": {"connection_id": "shell", "state": "closed"}}), {"type": "turn.completed"}])
         path.write_text("\n".join(json.dumps(event) for event in events))
 
     def test_exit_zero_and_agent_claims_cannot_replace_actual_remote_results(self):
@@ -57,6 +76,55 @@ class ActorBoundaryTest(unittest.TestCase):
             self.assertEqual(actor.audit_transcript(path)["completed_jobs"], 1)
             self.transcript(path, host_action=True)
             with self.assertRaisesRegex(lab.LabError, "disallowed host action"):
+                actor.audit_transcript(path)
+
+    def test_runtime_diagnostics_are_counted_without_accepting_missing_mcp_work(self):
+        diagnostic = {"type": "item.completed", "item": {"id": "diagnostic", "type": "error", "message": "transport unavailable"}}
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "actor.jsonl"
+            self.transcript(path)
+            with path.open("a") as output:
+                output.write("\n" + json.dumps(diagnostic))
+            self.assertEqual(actor.audit_transcript(path)["runtime_errors"], 1)
+            events = [{"type": "thread.started", "thread_id": "fresh-session"}, diagnostic, {"type": "turn.completed"}]
+            path.write_text("\n".join(json.dumps(event) for event in events))
+            with self.assertRaisesRegex(lab.LabError, "1 runtime errors recorded; exit status alone"):
+                actor.audit_transcript(path)
+            events.append({"type": "item.completed", "item": {"type": "command_execution", "command": "ssh target"}})
+            path.write_text("\n".join(json.dumps(event) for event in events))
+            with self.assertRaisesRegex(lab.LabError, "disallowed host action"):
+                actor.audit_transcript(path)
+
+    def test_disconnect_accepts_only_same_idle_terminal_connection_results(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "actor.jsonl"
+            self.transcript(path)
+            original = [json.loads(line) for line in path.read_text().splitlines()]
+            self.assertEqual(actor.audit_transcript(path)["closed_disconnects"], 1)
+            for state, identity, busy, accepted in (
+                    ("lost", "shell", "", True),
+                    ("active", "shell", "", False),
+                    ("unknown", "shell", "", False),
+                    ("lost", "other-shell", "", False),
+                    ("closed", "other-shell", "", False),
+                    ("lost", "shell", "unfinished-job", False),
+                    ("closed", "shell", "unfinished-job", False)):
+                with self.subTest(state=state, identity=identity, busy=busy):
+                    events = json.loads(json.dumps(original))
+                    result = events[-2]["item"]["result"]
+                    result["structured_content"]["connection"].update(state=state, connection_id=identity, busy_job_id=busy)
+                    path.write_text("\n".join(json.dumps(event) for event in events))
+                    if accepted:
+                        summary = actor.audit_transcript(path)
+                        self.assertEqual(summary["lost_disconnects"], 1)
+                        self.assertEqual(summary["closed_disconnects"], 0)
+                    else:
+                        with self.assertRaisesRegex(lab.LabError, "matching idle terminal result"):
+                            actor.audit_transcript(path)
+            events = json.loads(json.dumps(original))
+            events[-2]["item"]["result"]["isError"] = True
+            path.write_text("\n".join(json.dumps(event) for event in events))
+            with self.assertRaisesRegex(lab.LabError, "exit status alone"):
                 actor.audit_transcript(path)
 
     def test_child_timeout_stops_its_group_before_recording_failure(self):
@@ -178,6 +246,8 @@ class EvaluatorBoundaryTest(unittest.TestCase):
             {"metric": {"__name__": "http_requests", "__type__": "histogram", "job": "hello-go"}},
             {"metric": {"__name__": "http_requests_gauge_total", "__type__": "gauge", "job": "hello-go"}},
             {"metric": {"__name__": "http_requests_unknown_total", "job": "hello-go"}},
+            {"metric": {"__name__": "http_requests_bytes_total", "__type__": "counter", "job": "hello-go"}},
+            {"metric": {"__name__": "http_request_volume_total", "__type__": "counter", "__unit__": "By", "job": "hello-go"}},
         ]}}
         instance.backend = lambda kind, path, *args: flags if path.endswith("flags") else vector
         instance.sample = lambda selector: 100
@@ -196,6 +266,7 @@ class EvaluatorBoundaryTest(unittest.TestCase):
             if params["query"].startswith("sum("):
                 return {"status": "success", "data": {"result": [{"value": [10, "100"]}]}}
             return {"status": "success", "data": {"result": [
+                {"metric": {"__name__": "aa_requests_bytes_total", "__type__": "counter", "job": "hello-go"}},
                 {"metric": {"__name__": "http_requests_total", "__type__": "counter", "job": "demo/hello-go"}},
                 {"metric": {"__name__": "traefik_service_requests_total", "__type__": "counter", "job": "traefik"}},
             ]}}
@@ -207,7 +278,8 @@ class EvaluatorBoundaryTest(unittest.TestCase):
         self.assertEqual(counters["traefik"]["selector"], 'traefik_service_requests_total{__type__="counter",job="traefik"}')
         self.assertTrue(all(counter["before"] == 100 for counter in counters.values()))
         self.assertFalse(any(path.endswith("metadata") for path, _ in queries))
-        self.assertTrue(all('timestamp(' in params["query"] and '>= 10.0' in params["query"] for path, params in queries if params and params["query"].startswith("sum(")))
+        self.assertTrue(all('and ignoring(__type__,__unit__) (timestamp(' in params["query"] and '>= 10.0' in params["query"]
+                            for path, params in queries if params and params["query"].startswith("sum(")))
 
     def test_missing_type_feature_fails_before_counter_polling(self):
         instance = object.__new__(evaluate.Evaluator)
@@ -262,17 +334,27 @@ class EvaluatorBoundaryTest(unittest.TestCase):
                                                                                             "matcherType": "label", "matcherRegex": "trace_id"}]}}}
             counters = {"hello-go": {"name": "http_requests_total"}}
             probe = {"trace_id": "a" * 32, "started_ns": 10_000_000_000}
-            panels = [{"type": "timeseries", "datasource": {"uid": "metrics"}, "targets": [{"expr": "http_requests_total"}, {"expr": "http_duration_seconds"}]},
-                      {"type": "logs", "datasource": {"uid": "logs"}, "targets": [{"expr": '{service_name=~"hello-go|traefik"}'}]}]
-            instance.json = lambda path, *args: [{"uid": "dashboard"}] if path == "/api/search" else {"dashboard": {"panels": panels}}
+            panels = [{"type": "timeseries", "datasource": {"uid": "metrics"}, "targets": [
+                {"expr": "sum(increase(http_requests_total[$__range])) / ${__range_s}"},
+                {"expr": "rate(http_duration_seconds[$__rate_interval]) + $__interval_ms"}]},
+                {"type": "logs", "datasource": {"uid": "logs"}, "targets": [{"expr": '{service_name=~"hello-go|traefik"} |= "${probe}" |= "$probe"'}]}]
+            declaration = {"name": "probe", "type": "textbox", "current": {"value": ""}}
+            dashboard = {"panels": panels, "templating": {"list": [declaration]}}
+            instance.json = lambda path, *args: [{"uid": "dashboard"}] if path == "/api/search" else {"dashboard": dashboard}
+            expected_log_query = '{service_name=~"hello-go|traefik"} |= "" |= ""'
             for proxy_service, proxy_values, expected in ((None, [], False), ("traefik", [], False),
                                                            ("traefik", [["0", "old proxy log"]], False),
                                                            ("other-service", [["10000000000", "unrelated log"]], False),
                                                            ("traefik", [["10000000000", "proxy log"]], True)):
                 with self.subTest(proxy_service=proxy_service, values=proxy_values):
+                    queries = []
+
                     def backend(kind, path, params):
+                        queries.append((kind, params["query"]))
                         if kind == "prometheus":
+                            self.assertIn(params["query"], ("sum(increase(http_requests_total[5m])) / 300", "rate(http_duration_seconds[5m]) + 60000"))
                             return {"status": "success", "data": {"result": [{"value": [10, "1"]}]}}
+                        self.assertEqual(params["query"], expected_log_query)
                         streams = [{"stream": {"service_name": "hello-go"}, "values": [["10000000000", "app log"]]}]
                         if proxy_service:
                             streams.append({"stream": {"service_name": proxy_service}, "values": proxy_values})
@@ -288,6 +370,38 @@ class EvaluatorBoundaryTest(unittest.TestCase):
                         checks = json.loads((instance.directory / "dashboard-checks.json").read_text())
                         self.assertTrue(checks["app_logs"])
                         self.assertFalse(checks["proxy_logs"])
+            for declarations in ([], [{**declaration, "current": {"value": "nonempty"}}],
+                                 [{**declaration, "current": {"value": []}}], [{**declaration, "type": "custom"}]):
+                with self.subTest(unsupported_declaration=declarations):
+                    dashboard["templating"]["list"] = declarations
+                    queries.clear()
+                    with self.assertRaisesRegex(lab.LabError, "unsupported variable.*probe"):
+                        instance.dashboard(counters, [["10000000000", "correlated app log"]], probe)
+                    self.assertNotIn("loki", [kind for kind, _ in queries])
+            panels[-1]["targets"][0]["expr"] = '{service_name=~"hello-go|traefik"} |~ "${probe:raw}"'
+            for value in ("", ".*", r"(hello|proxy)\1", "${literal}"):
+                with self.subTest(raw_textbox=value):
+                    dashboard["templating"]["list"] = [{**declaration, "current": {"value": value}}]
+                    expected_log_query = '{service_name=~"hello-go|traefik"} |~ "' + value + '"'
+                    checks = instance.dashboard(counters, [["10000000000", "correlated app log"]], probe)
+                    self.assertTrue(checks["app_logs"] and checks["proxy_logs"])
+            for declarations in ([], [{**declaration, "current": {}}], [{**declaration, "current": {"value": []}}],
+                                 [{**declaration, "current": {"value": 123}}], [{**declaration, "current": {"value": "x" * 4097}}],
+                                 [{**declaration, "type": "custom"}]):
+                with self.subTest(unsupported_raw_declaration=declarations):
+                    dashboard["templating"]["list"] = declarations
+                    queries.clear()
+                    with self.assertRaisesRegex(lab.LabError, "unsupported variable.*probe"):
+                        instance.dashboard(counters, [["10000000000", "correlated app log"]], probe)
+                    self.assertNotIn("loki", [kind for kind, _ in queries])
+            dashboard["templating"]["list"] = [declaration]
+            for expression in ('${probe:regex}', '${probe:raw:invalid}'):
+                with self.subTest(unsupported_format=expression):
+                    panels[-1]["targets"][0]["expr"] = expression
+                    queries.clear()
+                    with self.assertRaisesRegex(lab.LabError, "unsupported.*variable"):
+                        instance.dashboard(counters, [["10000000000", "correlated app log"]], probe)
+                    self.assertNotIn("loki", [kind for kind, _ in queries])
 
     def test_counter_baseline_filters_underlying_sample_time_and_nan_panels_fail(self):
         instance = object.__new__(evaluate.Evaluator)

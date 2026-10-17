@@ -1,0 +1,413 @@
+{
+  "schema": 1,
+  "date_utc": "2026-10-17",
+  "accepted": true,
+  "run_id": "c94c230b79564965bf98acd9600e7427",
+  "fresh_deployment_attempt": 6,
+  "prior_failed_attempts": [
+    {
+      "attempt": 1,
+      "run_id": "6f4610ccae2442b5b75ddfe7bf833202",
+      "accepted": false,
+      "reason": "CLI transport host unavailable; zero usable MCP work",
+      "recorded_error": "Actor attempted a disallowed host action (error); attempt rejected.",
+      "process_seconds": 13.791401416994631,
+      "process_exit": 0,
+      "completed_tool_calls": 0,
+      "latest_observed_job_states": {},
+      "tool_errors": 0,
+      "runtime_errors": 3,
+      "cleanup_errors": [],
+      "in_run_human_guidance": 0,
+      "reached_independent_deployment_check": false,
+      "controlled_fault_ran": false,
+      "repair_actor_ran": false,
+      "benchmark_seconds": 2.151319915894419
+    },
+    {
+      "attempt": 2,
+      "run_id": "30e09ee532054406be39f7a2a01372c5",
+      "accepted": false,
+      "reason": "Audit rejected successful cleanup of already-lost idle connections",
+      "recorded_error": "Actor disconnect has no closed result.",
+      "process_seconds": 550.269004791975,
+      "process_exit": 0,
+      "completed_tool_calls": 92,
+      "latest_observed_job_states": {
+        "completed": 27,
+        "lost": 1,
+        "failed": 4
+      },
+      "tool_errors": 0,
+      "runtime_errors": 0,
+      "cleanup_errors": [],
+      "in_run_human_guidance": 0,
+      "reached_independent_deployment_check": false,
+      "controlled_fault_ran": false,
+      "repair_actor_ran": false,
+      "benchmark_seconds": 2.1587051250971854
+    },
+    {
+      "attempt": 3,
+      "run_id": "b34a2d8020154c3083105d62a65178b1",
+      "accepted": false,
+      "reason": "Counter freshness join mismatched reserved metadata labels",
+      "recorded_error": "Fresh telemetry lacks genuine Go and Traefik request counters; histograms are not substituted.",
+      "process_seconds": 580.4825012499932,
+      "process_exit": 0,
+      "completed_tool_calls": 89,
+      "latest_observed_job_states": {
+        "completed": 23,
+        "lost": 1,
+        "failed": 4
+      },
+      "tool_errors": 2,
+      "runtime_errors": 0,
+      "cleanup_errors": [],
+      "in_run_human_guidance": 0,
+      "reached_independent_deployment_check": true,
+      "controlled_fault_ran": false,
+      "repair_actor_ran": false,
+      "benchmark_seconds": 2.133767749881372
+    },
+    {
+      "attempt": 4,
+      "run_id": "4f5d7baa64404044a5ca59dbb4e5d970",
+      "accepted": false,
+      "reason": "Dashboard checker rejected valid scalar textbox raw interpolation",
+      "recorded_error": "Dashboard query uses unsupported formatted variable syntax; inspect the saved dashboard query.",
+      "process_seconds": 524.4662772079464,
+      "process_exit": 0,
+      "completed_tool_calls": 104,
+      "latest_observed_job_states": {
+        "completed": 30,
+        "lost": 2,
+        "failed": 5
+      },
+      "tool_errors": 2,
+      "runtime_errors": 0,
+      "cleanup_errors": [],
+      "in_run_human_guidance": 0,
+      "reached_independent_deployment_check": true,
+      "controlled_fault_ran": false,
+      "repair_actor_ran": false,
+      "benchmark_seconds": 2.149985041934997
+    },
+    {
+      "attempt": 5,
+      "run_id": "2964cb78279f467aab22eb352839b6bb",
+      "accepted": false,
+      "reason": "Installed CLI account usage limit interrupted the turn",
+      "recorded_error": "Actor reported a failed turn; inspect its private transcript.",
+      "process_seconds": 518.8625490828417,
+      "process_exit": 1,
+      "completed_tool_calls": 82,
+      "latest_observed_job_states": {
+        "completed": 24,
+        "lost": 1,
+        "failed": 4,
+        "accepted": 1
+      },
+      "tool_errors": 0,
+      "runtime_errors": 1,
+      "cleanup_errors": [],
+      "in_run_human_guidance": 0,
+      "reached_independent_deployment_check": false,
+      "controlled_fault_ran": false,
+      "repair_actor_ran": false,
+      "benchmark_seconds": 2.1567826671525836
+    }
+  ],
+  "successful_exercise_seconds": 900.060672,
+  "benchmark": {
+    "jobs": 16,
+    "sleep_seconds": 2,
+    "all_guest_intervals_overlap": true,
+    "dispatch_to_drained_seconds": 2.1365384159144014,
+    "maximum_allowed_seconds": 8,
+    "tool_calls": 628,
+    "transport_errors": 0,
+    "automatic_transport_retries": 0,
+    "warm_command_median_seconds": 0.14578558318316936,
+    "warm_command_max_seconds": 0.15527245798148215,
+    "per_call_seconds": {
+      "count": 628,
+      "median": 0.0042188954539597034,
+      "p95": 0.06595420790836215,
+      "max": 0.128670834004879
+    }
+  },
+  "actors": [
+    {
+      "stage": "deployment-actor",
+      "thread_id": "01a14b8b-9a0c-7390-9ecd-d39628fa0f1d",
+      "seconds": 562.6663929580245,
+      "completed_tool_calls": 90,
+      "submissions": 30,
+      "latest_observed_job_states": {
+        "completed": 23,
+        "lost": 2,
+        "failed": 5
+      },
+      "terminal_non_success_jobs": 7,
+      "tool_errors": 0,
+      "runtime_errors": 0,
+      "repeated_execute_keys": 0,
+      "repeated_exact_source_submissions": 0,
+      "duplicate_results": 0,
+      "closed_disconnects": 3,
+      "already_lost_idle_disconnects": 2,
+      "in_run_human_guidance": 0,
+      "feedback": [
+        "I\u2019ll inspect the VM, build and deploy the three-service stack, then check traffic, telemetry correlation, persistence, and startup settings. I\u2019ll keep the source and configuration together under the target account\u2019s home directory.\n",
+        "The target is Ubuntu 24.04 on ARM64, with enough disk and memory for the demo. Docker installation is underway. I\u2019m checking the pinned LGTM image\u2019s startup scripts and collector configuration so the stack uses its bundled components correctly.\n",
+        "The source and configuration are in `/home/mcp-test/sshmcp-demo`, and the pinned LGTM image is confirmed as ARM64. The Go build hit a container DNS issue, so I\u2019m using host networking for build-time dependency downloads. The running stack will use a private Compose network and publish only the two requested loopback ports.\n",
+        "The app is serving through Traefik, and the first checks passed: 81 requests returned the expected body, an incoming W3C trace ID was preserved, and Traefik\u2019s access logs retained `X-SSHMCP-Probe`. I\u2019m now checking the stored telemetry and dashboard queries, including the parent-child span relationships.\n",
+        "Prometheus is storing the application and Traefik request counters as `counter` series, and both services\u2019 logs carry trace context. Tempo also shows the expected chain: incoming parent \u2192 Traefik server \u2192 Traefik proxy client \u2192 Go server. I corrected the latency panels to use the histogram series this image actually stores. Next I\u2019ll verify persistence and restart behavior.\n",
+        "The dashboard\u2019s metric queries return data, and the source, private credential file, mounts, and published ports pass inspection. The native runner is enabled for startup. I\u2019m adding persistent collector queues and completing a reboot check to verify that the demo comes back without an SSH shell keeping it alive.\n",
+        "The stack is being recreated from the final files with its named volumes retained. I also adjusted the verifier to wait for the first fresh metric export after a restart; otherwise, it can compare a reset counter against an older stored value. The next pass will exercise all three signals and the dashboard before reboot.\n",
+        "The full check passed after container recreation: both request counters increased by 31, all eight metric panels returned finite values, both log streams matched the probe, and the Go server span had the expected Traefik parent. The log-to-Tempo link configuration also passed inspection. I\u2019m rebooting the VM now, then I\u2019ll check automatic recovery and retrieve telemetry saved before the reboot.\n",
+        "The reboot is scheduled, and both SSHMCP shells are closed. I\u2019m waiting for the target to return before checking that Docker restored the containers and the saved metrics, logs, traces, and dashboard are still available.\n",
+        "The VM rebooted successfully. All three containers resumed automatically and are healthy, and the full request and telemetry check passed again. I also retrieved the metrics, both log streams, trace, and dashboard saved before reboot. I\u2019m closing the final SSHMCP connection; the containers will keep running independently.\n",
+        "Deployed and left running on Ubuntu 24.04 ARM64.\n\n- Project: `sshmcp-demo`, with exactly `app`, `traefik`, and `lgtm`, using the required pinned LGTM image.\n- Application: target `http://127.0.0.1:8080/`\n- Grafana dashboard: target `http://127.0.0.1:3000/d/sshmcp-hello`\n- Source/configuration: `/home/mcp-test/sshmcp-demo`; credentials remain in its private `.env`.\n\nVerified request-counter increments, latency queries, both log streams, preserved probe headers, W3C span ancestry, and log-to-trace links through Grafana APIs. After an actual VM reboot, all three containers resumed automatically, and previously stored telemetry and the dashboard remained available.\n\nIncluded `README.md`, deployment/traffic scripts, repeatable verification scripts, and verification reports. All SSHMCP connections are closed.\n\nLimitations: browser interaction and hypervisor stop/start were not tested. This is a demo stack; proxy access logs need rotation for extended use, and abrupt shutdown can lose in-flight SDK telemetry. Initial DNS, Compose build, and SSHMCP shell issues were resolved."
+      ],
+      "feedback_is_actor_self_report": true
+    },
+    {
+      "stage": "repair-actor",
+      "thread_id": "01a14b96-4184-7310-802f-9f0f9a9c45a7",
+      "seconds": 116.81673429184593,
+      "completed_tool_calls": 25,
+      "submissions": 9,
+      "latest_observed_job_states": {
+        "completed": 9
+      },
+      "terminal_non_success_jobs": 0,
+      "tool_errors": 0,
+      "runtime_errors": 0,
+      "repeated_execute_keys": 0,
+      "repeated_exact_source_submissions": 0,
+      "duplicate_results": 0,
+      "closed_disconnects": 1,
+      "already_lost_idle_disconnects": 0,
+      "in_run_human_guidance": 0,
+      "feedback": [
+        "I\u2019ll trace the telemetry path, find where delivery is failing, and repair it if the available access allows.",
+        "The running application is sending all telemetry to `127.0.0.1:1`, where connections are refused. The saved configuration points to the collector at `http://lgtm:4318`. I\u2019ll recreate the application from that configuration, then verify fresh metrics, logs, and traces through Grafana.",
+        "The application is healthy with the correct collector address. I traced the bad address to a Compose override and archived that file. Fresh metrics are arriving; the verification is now checking correlated application and proxy logs, trace ancestry, and dashboard queries.",
+        "Telemetry is restored. A Compose override redirected the application\u2019s telemetry to `127.0.0.1:1`, causing connection failures.\n\nI archived the faulty override and recreated the application with `http://lgtm:4318`. Verification passed for fresh metrics, application and proxy logs, correlated traces, and dashboard queries. All services are healthy."
+      ],
+      "feedback_is_actor_self_report": true
+    }
+  ],
+  "independent_positive_checks": {
+    "deployment": {
+      "trace_id": "b6575d3dfe334f5bb338a2af0f60605b",
+      "burst_requests": 12,
+      "ancestry": {
+        "app_span_id": "8430c05c1707e3b4",
+        "proxy_ancestor_id": "7b0e5cc58e267383",
+        "trace_id": "b6575d3dfe334f5bb338a2af0f60605b"
+      },
+      "correlated_app_logs": 12,
+      "matching_proxy_json_log": true,
+      "counters_increased": true,
+      "counters": {
+        "hello-go": {
+          "name": "hello_requests_total",
+          "before": 35.0,
+          "after": 47.0
+        },
+        "traefik": {
+          "name": "traefik_entrypoint_requests_total",
+          "before": 35.0,
+          "after": 47.0
+        }
+      },
+      "dashboard_checks": {
+        "requests": true,
+        "latency": true,
+        "app_logs": true,
+        "proxy_logs": true,
+        "trace_navigation": true
+      }
+    },
+    "repair": {
+      "trace_id": "f91787c8ceb0423bb8bff97e64b5f4f3",
+      "burst_requests": 12,
+      "ancestry": {
+        "app_span_id": "26311bb34f914a7d",
+        "proxy_ancestor_id": "97982adc134a14f8",
+        "trace_id": "f91787c8ceb0423bb8bff97e64b5f4f3"
+      },
+      "correlated_app_logs": 12,
+      "matching_proxy_json_log": true,
+      "counters_increased": true,
+      "counters": {
+        "hello-go": {
+          "name": "hello_requests_total",
+          "before": 35.0,
+          "after": 47.0
+        },
+        "traefik": {
+          "name": "traefik_entrypoint_requests_total",
+          "before": 95.0,
+          "after": 107.0
+        }
+      },
+      "dashboard_checks": {
+        "requests": true,
+        "latency": true,
+        "app_logs": true,
+        "proxy_logs": true,
+        "trace_navigation": true
+      }
+    }
+  },
+  "controlled_fault": {
+    "observation_seconds": 120,
+    "app_spans": 0,
+    "app_logs": 0,
+    "proxy_spans": 24,
+    "proxy_json_log": true,
+    "app_counter_before": 47.0,
+    "app_counter": 47.0
+  },
+  "repair_prompt": "Telemetry has stopped arriving; diagnose and repair it.",
+  "in_run_human_guidance": 0,
+  "retry_accounting": "Automatic transport retries and exact repeated submissions are separate from actor recovery. The accepted deployment completed after five failed remote jobs and two lost jobs. Five earlier full deployment attempts remain failed.",
+  "between_attempt_engineering": [
+    {
+      "after_attempt": 1,
+      "change": "Enable the CLI-required MCP transport host while keeping model Code Mode and host tools disabled; count CLI diagnostics as runtime errors. A read-only MCP preflight/catalog check verified the three-tool surface."
+    },
+    {
+      "after_attempt": 2,
+      "change": "Accept successful disconnects only for the same idle connection in closed or already-cleaned lost state; preserve other refusals."
+    },
+    {
+      "after_attempt": 3,
+      "change": "Ignore only reserved type/unit labels in the counter timestamp freshness join; exclude byte-volume counters. Render bounded standard dashboard time macros and declared empty textbox defaults."
+    },
+    {
+      "after_attempt": 4,
+      "change": "Render declared scalar textbox values for explicit Grafana raw interpolation with a 4 KiB bound; preserve unsupported-format failures."
+    },
+    {
+      "after_attempt": 5,
+      "change": "No implementation change for account quota. The user resumed work with changed stored auth-file bytes; a new continuation baseline was recorded without restoring credentials or changing global account/model settings."
+    }
+  ],
+  "developer_diagnostics": [
+    {
+      "evidence_name": "20261017T163159Z-cp7-cli-preflight-326887f240c04a208cab5f7c2bb26e24",
+      "accepted_exercise": false,
+      "success": true,
+      "primary_error": null,
+      "model_run": true,
+      "application_changes": false,
+      "model_scope": "Separate read-only MCP client preflight; not an application deployment or accepted exercise."
+    },
+    {
+      "evidence_name": "20261017T163250Z-cp7-catalog-probe-0ebd9653dbbb492fa24a3a32d07e1d8c",
+      "accepted_exercise": false,
+      "success": false,
+      "primary_error": "Initialized private catalog differs from direct three-tool contract",
+      "model_run": false,
+      "application_changes": false,
+      "corrected_verification": {
+        "success": true,
+        "available_tool_count": 3,
+        "original_failed_assertion_retained": true
+      }
+    },
+    {
+      "evidence_name": "20261017T171017Z-cp7-counter-diagnostic-d7fcb12f339c430197c6572a81e81bf7",
+      "accepted_exercise": false,
+      "success": true,
+      "primary_error": null,
+      "model_run": false,
+      "application_changes": false
+    },
+    {
+      "evidence_name": "20261017T171315Z-cp7-positive-checker-diagnostic-23bc6d57405a419f95bee849e2b46a4d",
+      "accepted_exercise": false,
+      "success": false,
+      "primary_error": "Independent Grafana/backend query failed (HTTP 400).",
+      "model_run": false,
+      "application_changes": false
+    },
+    {
+      "evidence_name": "20261017T172130Z-cp7-positive-checker-diagnostic-0ff1dacf870845c191dcea38c11865bd",
+      "accepted_exercise": false,
+      "success": true,
+      "primary_error": null,
+      "model_run": false,
+      "application_changes": false
+    },
+    {
+      "evidence_name": "20261017T174417Z-cp7-positive-checker-diagnostic-17fed894669c4f339dc8db9deaae3323",
+      "accepted_exercise": false,
+      "success": true,
+      "primary_error": null,
+      "model_run": false,
+      "application_changes": false
+    }
+  ],
+  "read_only_in_run_infrastructure_observation": {
+    "count": 1,
+    "application_inspection": false,
+    "service_changes": false,
+    "agent_guidance": false,
+    "purpose": "Bounded fixed gateway/runner diagnostics while local transcript output appeared delayed; both services were active."
+  },
+  "source_export": {
+    "primary_files": 20,
+    "supplemental_files": 1,
+    "primary_manifest_sha256": "8ad36d03a740ab57683e855dbb74a08bb5cb0b454cb7566e63dc766eb173f5b1",
+    "primary_redacted_files": 0,
+    "supplemental_redacted": false,
+    "supplemental_read_only": true,
+    "source_hand_written_before_actors": false,
+    "original_successful_private_export_unchanged": true
+  },
+  "privacy": {
+    "application": "http://127.0.0.1:18090/",
+    "grafana": "http://127.0.0.1:13000/",
+    "grafana_credentials": "Private .lab/demo/access.json (0600), not part of this export.",
+    "host_mounts_added": false,
+    "global_settings_changed_by_builder": false,
+    "stored_auth_raw_hash_changed_at_continuation": true,
+    "continuation_account_identity_preserved": true,
+    "protected_file_bytes_and_identity_hashes_preserved": true
+  },
+  "independent_tester": {
+    "passed": true,
+    "evidence_directory": ".lab/results/20261017T210215Z-cp7-independent-tester-206c830dfb5b40c7b14dc2ae5f125d73/",
+    "down_seconds": 9.465,
+    "up_seconds": 75.021,
+    "fresh_post_resume_telemetry_passed": true,
+    "historical_telemetry_preserved": true,
+    "container_ids_and_named_volumes_preserved": true,
+    "private_captured_file_hashes_preserved": 23,
+    "public_source_hashes_preserved": 21,
+    "networking_privacy_and_arm64_verified": true,
+    "parallel_jobs": 16,
+    "parallel_jobs_all_overlapped": true,
+    "dispatch_to_drained_seconds": 2.169478,
+    "benchmark_mcp_calls": 634,
+    "benchmark_transport_errors": 0,
+    "benchmark_transport_retries": 0,
+    "benchmark_connections_closed": 16,
+    "application_changes": false,
+    "new_model_actors": false,
+    "demo_left_running": true
+  },
+  "limits": [
+    "One accepted real exercise on private Ubuntu ARM64 VMs after five preserved failed attempts.",
+    "The actor feedback and source/verification JSON files are actor self-reports; acceptance uses separate operator and backend evidence.",
+    "Per-call latencies are available for the 628-call benchmark; the installed actor JSONL does not provide comparable per-call timing.",
+    "The dedicated Tester executed actual down/up and fresh telemetry checks separately from the deployment actor's own reboot self-report.",
+    "No public deployment or production readiness claim."
+  ]
+}

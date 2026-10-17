@@ -251,12 +251,16 @@ between fresh provisions.
    `agent-demo-down`, and explicit target-only `agent-demo-reset`; fresh isolated
    actors, separate fault operator, real telemetry evaluation, and private evidence
    exports. See [lab/DEMO.md](lab/DEMO.md).
+7. **Actual agent exercise:** a sixth fresh deployment attempt passed the full
+   independent telemetry checks, controlled 120-second fault, and a separate
+   fresh repair. The [actual source and report](examples/agent-demo/README.md)
+   preserve all five earlier failed attempts and the agent-created snapshot.
 
 Checkpoints 1–3 implement the original control infrastructure. Checkpoint 4 adds
 the target runner and its focused checks. Checkpoint 5 adds private authenticated
-MCP access. Checkpoint 6 supplies the exercise machinery; an actual fresh-agent
-application deployment and repair acceptance run remains checkpoint 7. A passing default `lab-test` continues to cover only the
-control infrastructure fixture.
+MCP access. Checkpoint 6 supplies the exercise machinery; checkpoint 7 records
+the actual deployment and repair acceptance run. A passing default `lab-test`
+continues to cover only the control infrastructure fixture.
 
 ## Development checks
 

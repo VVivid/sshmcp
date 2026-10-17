@@ -1,4 +1,4 @@
-# Private agent exercise (checkpoint 6 infrastructure)
+# Private agent exercise
 
 This lifecycle runs two real, fresh installed-Codex sessions against the three
 private MCP tools. The first deploys an observable Go/Traefik/LGTM demo from a
@@ -13,6 +13,13 @@ both private VMs and the demo running. Checkpoint 6 implements this machinery;
 the actual model-driven deployment and repair acceptance run is checkpoint 7.
 No prepared Go app, Docker installation recipe, Compose configuration, or seed
 application files are copied to the target or actor workspace by this harness.
+
+Checkpoint 7's sixth fresh deployment attempt passed the complete deployment,
+120-second fault, and fresh repair exercise on 2026-10-17. The five earlier
+attempts remain failed. The [actual-source snapshot and report](../examples/agent-demo/README.md)
+preserve their history, the independent backend results, and the agent-created
+files captured after acceptance. Detailed private evidence references remain in
+[VALIDATION.md](VALIDATION.md).
 
 ## Commands and state
 
@@ -97,6 +104,13 @@ define this component constraint; no application or deployment recipe is added.
 Grafana datasources are discovered by type rather than assuming their UIDs.
 Dashboard checks require request/latency queries, populated application and
 proxy log streams, and trace navigation.
+Backend dashboard probes render an explicit five-minute time context, including
+the common numeric range/interval forms. They also resolve declared textbox
+defaults when `current.value` is explicitly the empty string, or an explicit
+`${name:raw}` format with a scalar string current value of at most 4 KiB.
+Raw values preserve Grafana's verbatim semantics, including regex syntax.
+Unknown variables, other formats, nonempty unformatted defaults, and multivalue
+defaults fail clearly before backend use.
 Backend responses and current deployment/container state are retained. Export
 waits are bounded to 120 seconds. The controlled fault is proved over a complete
 120-second window with HTTP/proxy telemetry still working, fresh Go traces/logs
@@ -119,6 +133,11 @@ prove the catalog/memory/project instructions are absent. A changed/unsupported
 isolation format fails before a model run. Completed JSONL tool results are
 audited; local command/file/browser actions or unrelated MCPs fail acceptance.
 Exit zero or an actor's success statement is insufficient.
+The installed CLI's required MCP transport host remains enabled; its
+model-visible Code Mode feature stays disabled. CLI diagnostic items are counted
+as runtime errors. A successful disconnect must return the requested idle
+connection in `closed` or already-cleaned `lost` state; both states are counted,
+while an active, mismatched, or busy result cannot satisfy cleanup.
 Each actor/probe stdout and stderr stream is capped separately at 8 MiB while
 the child runs. Overflow rejects the operation and stops its exact process
 group; the private process record marks retained byte prefixes as incomplete.
@@ -156,6 +175,13 @@ operator evidence. Docker volumes, logs/data directories, dependency caches,
 and compiled binaries are excluded. Export refuses symlinks, unknown paths,
 non-UTF-8 source/config, files over 256 KiB, over 128 files, or over 4 MiB total;
 it does not silently truncate an archive.
+
+The checkpoint-7 snapshot has 20 primary files from that unchanged
+successful export plus the actual `verify.py` collected afterward through a
+separate bounded read-only MCP operator. Its combined manifest distinguishes
+the two collections. No source was rewritten or supplied to either actor.
+The gitignored `.lab/demo/access.json` holds private Grafana access notes with
+mode `0600`; it is separate from the shareable source and report.
 
 These focused developer commands do not run deployment/troubleshooting models:
 

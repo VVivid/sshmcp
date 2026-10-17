@@ -1,0 +1,13 @@
+{
+  "previous_boot_id": "2d7c5e68-8b41-474f-b867-ec6884cf04d3",
+  "current_boot_id": "ac17984b-073c-4b38-a9d4-ce83091e198a",
+  "prior_trace_id": "b000b69c30b4e4d606ced32bc4bcaf37",
+  "persistent_signals": [
+    "metrics",
+    "application logs",
+    "proxy logs",
+    "traces",
+    "Grafana dashboard"
+  ],
+  "status": "passed"
+}
