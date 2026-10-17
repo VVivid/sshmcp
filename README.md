@@ -1,13 +1,14 @@
 # SSHMCP testing lab
 
 This repository currently provides a reusable, private Linux VM for later SSHMCP
-development. The first milestone provisions Ubuntu 24.04 ARM64 with SSH, systemd,
+development. It provisions Ubuntu 24.04 ARM64 with SSH, systemd,
 Docker Engine, and the Docker Compose plugin. It creates a dedicated `mcp-test`
 account with its own generated SSH key, noninteractive sudo, and a lingering
 systemd user manager.
 
-The MCP server, application deployment, persistent shell sessions, and MCP tests
-are future work. None are implemented in this checkpoint.
+The only deployed payload is a small infrastructure smoke fixture. There is no
+MCP application or current application build to deploy yet. MCP, authentication,
+and persistent-shell behavior remain future work.
 
 ## Requirements
 
@@ -17,7 +18,9 @@ are future work. None are implemented in this checkpoint.
 - Python 3.10 or newer, Make, and OpenSSH (`ssh` and `ssh-keygen`). Python uses only
   its standard library; no virtual environment or Python packages are required.
 - At least 2 CPUs, 4GB RAM, and 40GB disk available for this VM, plus Internet
-  access for Ubuntu and Docker packages during first provisioning.
+  access for Ubuntu and Docker packages during first provisioning. The first
+  smoke run also pulls the public ARM64 nginx Alpine image from Docker Hub,
+  pinned by registry digest in the versioned fixture.
 
 ## Use
 
@@ -27,6 +30,8 @@ Run these commands from the repository:
 make lab-up
 make lab-status
 make lab-down
+make lab-test
+make lab-reset
 ```
 
 `lab-up` creates the named VM `sshmcp-test` with 2 CPUs, 4GB RAM, and a 40GB disk,
@@ -34,7 +39,10 @@ or starts and checks the previously enrolled VM. First provisioning can take
 several minutes. It waits for cloud-init and verifies Ubuntu, ARM64, systemd, SSH,
 noninteractive sudo, the Docker daemon/API, Compose, and the systemd user manager.
 The checks run through Multipass, then through a real SSH connection using the
-generated key and strict host-key verification.
+generated key and strict host-key verification. On the first successful
+provisioning/readiness, it immediately records the clean baseline before returning
+control for interactive use: stop, snapshot, start, and recheck readiness. Later
+`lab-up` calls verify the existing baseline without replacing it.
 
 `lab-status` inspects the current VM and checks readiness when it is running. It
 reports an absent or stopped VM as **not ready**, and does not start it. Failed
@@ -44,6 +52,50 @@ VM is a normal status result, not a claim that services are ready.
 `lab-down` verifies a running VM's identity before stopping it. Repeated stops
 are harmless. The disk and its contents remain available for the next `lab-up`.
 These commands never delete or purge VMs, and never target all instances.
+
+`lab-test` starts or provisions the owned VM, checks readiness, and establishes a
+clean baseline before running any test payload. For the first baseline it stops
+the VM, takes one snapshot, then starts and verifies it again. It streams the
+versioned [smoke fixture](lab/smoke.v1.sh) through strict SSH and checks:
+
+- The dedicated account can execute commands through its pinned SSH connection.
+- A short systemd user job completes successfully.
+- Docker Compose pulls/starts an HTTP container, passes its healthcheck, returns
+  the expected file through a port bound only to `127.0.0.1` **inside the VM**,
+  exposes its logs, and shuts down explicitly.
+
+The guest directory, systemd units, and Compose project have a fresh run ID.
+Cleanup collects diagnostics first, stops that run's workload unit, removes only
+that run's fixture resources, and stops the ownership-verified VM. Repeated tests
+reuse the disk and image cache. They do not automatically restore the entire VM.
+The versioned smoke fixture pins the successfully validated public image digest;
+the baseline covers the provisioned VM before that image was pulled.
+
+`lab-reset` is explicitly destructive to **all guest disk changes made after the
+recorded clean baseline**, including manually created guest files and pulled
+container images. It never discards host files or replaces the VM. It checks the
+recorded snapshot's name, owner-bound comment, creation metadata, and mounts;
+starts the VM if needed to verify its current owner and SSH pin; stops it; and
+restores that exact snapshot. It then starts the restored VM, verifies identity
+and full readiness, and stops it again. The owner marker, dedicated SSH key, and
+pinned guest host key remain the same. A test after reset may need to pull the
+public image again.
+
+Reset intentionally checks identity without requiring Docker health before
+restore. It can repair broken Docker when the VM still boots and its ownership
+can be proven. It refuses absent or unrecorded baselines, extra/unknown snapshots,
+changed metadata, mounts, or owner/key mismatches. If the VM cannot boot far enough
+to prove its owner and pin, reset cannot safely repair it; inspect it manually.
+It never deletes/recreates the VM or rewrites the pin to recover.
+
+Each test/reset reports a private directory under `.lab/results/`. Test runs save
+`workload.log`, fixed `diagnostics.log`, `cleanup.log`, and `result.json`; reset
+runs save restore/diagnostic output and a result. Diagnostics include cloud-init
+status, SSH/Docker journals, the run's systemd journal, and fixture status/logs.
+They do not dump environment variables or SSH key files. Directories are `0700`
+and files are `0600`. A failure before guest identity is proven can only save a
+local result; it cannot safely inspect, clean, or stop an unverified VM. Review
+the result file for the original error and any separate diagnostics/cleanup errors.
 
 After successful `lab-up`, an interactive connection is available with:
 
@@ -59,6 +111,14 @@ test private key, rendered cloud-init, SSH configuration, and pinned known-host
 data. Cloud-init receives the **public** key only. Keep `.lab/` with this
 workspace; removing or moving it breaks the ownership record. The tool refuses
 to adopt an existing VM merely because its name is `sshmcp-test`.
+
+The optional baseline record extends the existing schema-1 manifest. Its unique
+versioned snapshot name and comment are persisted **before** issuing the snapshot
+command. Later runs verify and reuse it; they never overwrite it. If snapshot
+creation is interrupted, a later command accepts only the exact recorded identity
+when its complete metadata is visible. Missing or ambiguous creation state fails
+closed instead of issuing another snapshot. This uses Multipass 1.16's
+`info --snapshots` and `info INSTANCE.SNAPSHOT` interfaces.
 
 Creation records a random owner marker locally and in `/etc/sshmcp-lab/owner` in
 the guest. The tool obtains the SSH host public key through Multipass's management
@@ -101,6 +161,18 @@ fresh disposable lab, preserve diagnostic evidence and verify ownership before
 manually stopping and recreating that one VM and its local state. The lifecycle
 commands deliberately do not automate destructive recovery.
 
+Tests and reset preserve a nonzero exit status on workload, diagnostics, cleanup,
+or stop failure. They attempt diagnostics before fixture removal and attempt the
+ownership-checked stop even when diagnostic collection or fixture cleanup fails.
+A handled `SIGINT`/`SIGTERM` during the operation enters bounded cleanup and exits
+with status 130/143. `SIGINT`/`SIGTERM` received during cleanup are ignored so it can
+finish; `SIGKILL`, host shutdown, or daemon failure cannot guarantee cleanup.
+The remote workload also has a six-minute systemd runtime limit. An interrupted
+Multipass client can leave an operation running in its daemon; if ownership was
+not established, the tool reports the error without trying to stop that VM.
+No repository/home directory is mounted from the host. The HTTP container mounts
+only its run-specific fixture file already copied into the guest.
+
 The versioned recipe is [lab/cloud-init.v1.yaml](lab/cloud-init.v1.yaml), and the
 entry point is [tools/lab.py](tools/lab.py). Docker uses its
 [official Ubuntu APT repository and keyring](https://docs.docker.com/engine/install/ubuntu/#install-using-the-apt-repository).
@@ -111,10 +183,38 @@ between fresh provisions.
 
 1. **Provision and manage:** versioned cloud-init, owned VM creation, private SSH
    trust, readiness, up/down/status, and this usage guide.
-2. **Test lifecycle:** direct Multipass integration checks, diagnostic logs, and a
+2. **Test lifecycle:** strict SSH integration checks, private diagnostic logs, and a
    baseline snapshot/reset workflow.
 3. **Validate and hand off:** a modest set of failure and repeatability checks,
    verified usage instructions, and final handoff.
 
-Checkpoint 1 implements only the first item. `lab-test`, snapshots, and reset
-commands arrive in checkpoint 2.
+Checkpoints 1 and 2 implement the infrastructure above. Current-build application
+deployment, MCP protocol calls, OAuth/authentication, gateway/runner behavior,
+persistent sessions, and the planned 16-session cases are pending. A passing
+`lab-test` makes no claim about those future application tests.
+
+## Development checks
+
+The normal focused regression test and syntax checks do not start a VM:
+
+```sh
+python3 -m unittest discover -s tests -v
+python3 -m py_compile tools/lab.py tests/test_lab.py tests/integration_lab.py
+bash -n lab/smoke.v1.sh
+```
+
+The following opt-in harness uses the real VM and **restores its baseline**. Run
+it when guest changes are disposable and no other lab operation is running:
+
+```sh
+python3 tests/integration_lab.py -v
+```
+
+Its three cases exercise an expected workload failure, real handled `SIGTERM`,
+and reset removing a guest marker while repairing deliberately stopped Docker.
+The first two patch only the Python workload boundary after running the real
+fixture, restart that run's Compose service, then inject failure or the signal.
+They assert private failure results, removed active run resources, and stopped VM
+state. The reset case also asserts that ownership and SSH trust did not change.
+This harness is separate from ordinary test discovery; it adds no production
+fault-injection switches.

@@ -4,6 +4,7 @@
 import argparse
 import base64
 from contextlib import contextmanager
+from datetime import datetime, timezone
 import fcntl
 import ipaddress
 import json
@@ -12,6 +13,7 @@ from pathlib import Path
 import platform
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -28,6 +30,8 @@ VM = "sshmcp-test"
 USER = "mcp-test"
 OWNER_FILE = "/etc/sshmcp-lab/owner"
 TEMPLATE = ROOT / "lab" / "cloud-init.v1.yaml"
+SMOKE = ROOT / "lab" / "smoke.v1.sh"
+BASELINE_VERSION = 1
 PRIVATE_NETWORKS = tuple(
     ipaddress.ip_network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
@@ -65,16 +69,47 @@ check 'systemd user manager' sudo -n -u mcp-test env \
 class LabError(Exception):
     """An expected failure that can be safely shown without command output."""
 
+    def __init__(self, message, *, exit_code=1):
+        super().__init__(message)
+        self.exit_code = exit_code
 
-def run(arguments, *, label, timeout=30, input_text=None):
-    """Keep all subprocesses bounded and never expose their possibly private output."""
+
+class LabInterrupted(Exception):
+    def __init__(self, signum):
+        self.signum = signum
+        super().__init__(f"Interrupted by {signal.Signals(signum).name}.")
+
+
+@contextmanager
+def interrupt_handling(*, cleanup=False):
+    """Bounded cleanup completes after the first handled interrupt."""
+    def interrupted(signum, frame):
+        raise LabInterrupted(signum)
+
+    previous = {}
     try:
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            previous[signum] = signal.signal(signum, signal.SIG_IGN if cleanup else interrupted)
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+def run(arguments, *, label, timeout=30, input_text=None, log_path=None):
+    """Keep all subprocesses bounded and never expose their possibly private output."""
+    log = None
+    try:
+        if log_path is not None:
+            write_private(log_path, f"{label}\n")
+            descriptor = os.open(log_path, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
+            log = os.fdopen(descriptor, "w")
         result = subprocess.run(
             [str(argument) for argument in arguments],
             input=input_text,
             text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=log if log else subprocess.PIPE,
+            stderr=subprocess.STDOUT if log else subprocess.PIPE,
             timeout=timeout,
             check=False,
             cwd=ROOT,
@@ -83,27 +118,31 @@ def run(arguments, *, label, timeout=30, input_text=None):
         raise LabError(f"{label} timed out after {timeout}s; inspect the VM before retrying.") from None
     except OSError as error:
         raise LabError(f"{label} could not run ({error.strerror}).") from None
+    finally:
+        if log is not None:
+            log.close()
     if result.returncode:
         # Our readiness script emits fixed check names, never keys or markers.
         failed_check = next(
-            (line for line in result.stderr.splitlines() if line.startswith("Readiness check failed: ")),
+            (line for line in (result.stderr or "").splitlines() if line.startswith("Readiness check failed: ")),
             None,
         )
         detail = f" {failed_check}." if failed_check else ""
         raise LabError(f"{label} failed (exit {result.returncode}).{detail}")
-    return result.stdout
+    return result.stdout or ""
 
 
-def multipass(*arguments, label, timeout=30):
-    return run(["multipass", *arguments], label=label, timeout=timeout)
+def multipass(*arguments, label, timeout=30, log_path=None):
+    return run(["multipass", *arguments], label=label, timeout=timeout, log_path=log_path)
 
 
-def guest(*arguments, label, timeout=30, input_text=None):
+def guest(*arguments, label, timeout=30, input_text=None, log_path=None):
     return run(
         ["multipass", "exec", "--no-map-working-directory", VM, "--", *arguments],
         label=label,
         timeout=timeout,
         input_text=input_text,
+        log_path=log_path,
     )
 
 
@@ -191,6 +230,18 @@ def load_state():
             raise ValueError
         if state["host_key"] is not None:
             public_key(state["host_key"])
+        if "baseline" in state:
+            baseline = state["baseline"]
+            if (
+                not isinstance(baseline, dict)
+                or baseline["version"] != BASELINE_VERSION
+                or not re.fullmatch(r"[0-9a-f]{32}", baseline["id"])
+                or baseline["name"] != f"clean-v{BASELINE_VERSION}-{baseline['id'][:16]}"
+                or baseline["comment"] != f"sshmcp-clean-v{BASELINE_VERSION}:{state['owner']}:{baseline['id']}"
+                or baseline["phase"] not in {"creating", "ready"}
+                or (baseline["phase"] == "ready" and not isinstance(baseline["created"], str))
+            ):
+                raise ValueError
         for path in (KEY, KEY.with_suffix(".pub"), KNOWN_HOSTS, SSH_CONFIG):
             ensure_private_path(path)
     except (ValueError, KeyError, TypeError):
@@ -377,7 +428,8 @@ def launch(state):
     )
 
 
-def up(state, existing):
+def start_owned(state, existing):
+    """Create or start the recorded VM, then prove its owner and SSH pin."""
     if existing is None:
         if state is None:
             state = prepare_state()
@@ -398,7 +450,16 @@ def up(state, existing):
             print(f"Starting {VM} for immediate ownership and pinned-key verification.", flush=True)
             multipass("start", VM, "--timeout", "180", label="VM verification start", timeout=200)
     verify_identity(state, enroll=True)
+    return state
+
+
+def up(state, existing):
+    state = start_owned(state, existing)
     check_ready(state, wait=True)
+    if ensure_baseline(state):
+        state = start_owned(state, inventory())
+        check_ready(state, wait=True)
+    return state
 
 
 def down(state, existing):
@@ -436,9 +497,270 @@ def status(state, existing):
     check_ready(state, wait=False)
 
 
+def snapshot_inventory(*, name=None):
+    """Multipass 1.16 exposes snapshots through info, not a snapshots command."""
+    arguments = [f"{VM}.{name}"] if name else [VM, "--snapshots"]
+    try:
+        data = json.loads(multipass("info", *arguments, "--format", "json", label="Baseline snapshot information"))
+        if not isinstance(data, dict) or data.get("errors") != []:
+            raise ValueError
+        info = data["info"]
+        if info == {}:
+            return {}
+        if not isinstance(info, dict) or set(info) != {VM}:
+            raise ValueError
+        snapshots = info[VM]["snapshots"]
+        if not isinstance(snapshots, dict) or any(not isinstance(item, dict) for item in snapshots.values()):
+            raise ValueError
+        return snapshots
+    except (ValueError, KeyError, TypeError):
+        raise LabError("Multipass returned ambiguous snapshot metadata; the baseline was not changed.") from None
+
+
+def verify_baseline(state):
+    baseline = state.get("baseline")
+    if baseline is None:
+        raise LabError("No recorded clean baseline exists; lab-reset will not guess or create one.")
+    snapshots = snapshot_inventory()
+    if set(snapshots) != {baseline["name"]}:
+        raise LabError("Baseline snapshot is absent or unknown snapshots exist; inspect Multipass without replacing the baseline.")
+    detailed = snapshot_inventory(name=baseline["name"])
+    if detailed != snapshots:
+        raise LabError("Snapshot listing and detail disagree; refusing an ambiguous baseline.")
+    metadata = snapshots[baseline["name"]]
+    if (
+        metadata.get("comment") != baseline["comment"]
+        or not isinstance(metadata.get("created"), str)
+        or not metadata["created"]
+        or metadata.get("parent") != ""
+        or metadata.get("children") != []
+    ):
+        raise LabError("Snapshot identity does not match the recorded clean baseline.")
+    check_no_mounts(metadata)
+    if baseline["phase"] == "creating":
+        # An interrupted client may have completed its snapshot in multipassd.
+        # Adopt only the exact pre-recorded name and owner-bound comment.
+        baseline["created"] = metadata["created"]
+        baseline["phase"] = "ready"
+        save_state(state)
+    elif baseline["created"] != metadata["created"]:
+        raise LabError("The baseline creation metadata changed; refusing a replacement snapshot.")
+
+
+def ensure_baseline(state):
+    """Verify or create the baseline after readiness, before any test payload.
+
+    Return True only when creation stopped the VM; the caller must restart it
+    and recheck readiness before returning control or running a workload.
+    """
+    if state.get("baseline") is not None:
+        verify_baseline(state)
+        return False
+    if snapshot_inventory():
+        raise LabError("Unrecorded snapshots exist; refusing to choose or replace a clean baseline.")
+    down(state, inventory())
+    identity = uuid.uuid4().hex
+    state["baseline"] = {
+        "version": BASELINE_VERSION,
+        "id": identity,
+        "name": f"clean-v{BASELINE_VERSION}-{identity[:16]}",
+        "comment": f"sshmcp-clean-v{BASELINE_VERSION}:{state['owner']}:{identity}",
+        "phase": "creating",
+    }
+    # A timeout or interruption can outlive the snapshot client. Never issue a
+    # second creation command from this intent, even if no snapshot is visible.
+    save_state(state)
+    multipass(
+        "snapshot", VM, "--name", state["baseline"]["name"], "--comment", state["baseline"]["comment"],
+        label="Clean baseline creation", timeout=240,
+    )
+    verify_baseline(state)
+    print(f"{VM}: clean baseline v{BASELINE_VERSION} recorded; it will not be overwritten.")
+    return True
+
+
+def new_results(operation):
+    parent = LOCAL / "results"
+    ensure_private_path(parent, directory=True)
+    parent.mkdir(mode=0o700, exist_ok=True)
+    run_id = uuid.uuid4().hex
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    directory = parent / f"{stamp}-{operation}-{run_id}"
+    directory.mkdir(mode=0o700)
+    return run_id, directory
+
+
+def strict_ssh(command, *, label, timeout, input_text=None, log_path=None):
+    return run(
+        ["ssh", "-F", SSH_CONFIG, VM, command], label=label, timeout=timeout,
+        input_text=input_text, log_path=log_path,
+    )
+
+
+def run_workload(run_id, directory):
+    """Run the versioned fixture through strict SSH in a bounded user unit."""
+    # The unit owns the remote process lifetime even if the SSH client exits.
+    # Its separate short child job is part of the smoke fixture being tested.
+    command = (
+        f"XDG_RUNTIME_DIR=/run/user/$(id -u) "
+        f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus "
+        f"systemd-run --user --unit=sshmcp-workload-{run_id}.service "
+        "--property=RuntimeMaxSec=360 --property=TimeoutStopSec=10 --wait --pipe --collect "
+        f"bash -s -- run {run_id}"
+    )
+    strict_ssh(command, label="Strict SSH integration workload", timeout=390,
+               input_text=SMOKE.read_text(), log_path=directory / "workload.log")
+
+
+def collect_diagnostics(run_id, directory):
+    # Management access is inspection only; the test payload always uses SSH.
+    guest(
+        "sudo", "-n", "-u", USER, "env", f"HOME=/home/{USER}",
+        "bash", "-s", "--", "diagnostics", run_id,
+        label="Fixed VM diagnostics", timeout=60, input_text=SMOKE.read_text(),
+        log_path=directory / "diagnostics.log",
+    )
+
+
+def cleanup_workload(run_id, directory):
+    strict_ssh(
+        f"timeout --kill-after=10s 70s bash -s -- cleanup {run_id}",
+        label="Run-specific fixture cleanup", timeout=90, input_text=SMOKE.read_text(),
+        log_path=directory / "cleanup.log",
+    )
+
+
+def error_text(error):
+    if isinstance(error, KeyboardInterrupt):
+        return "Interrupted by SIGINT."
+    if isinstance(error, (LabError, LabInterrupted, OSError)):
+        return str(error)
+    return f"Unexpected {type(error).__name__}; inspect the lab implementation."
+
+
+def cleanup_step(action, errors):
+    """Record one cleanup failure without preventing the remaining steps."""
+    try:
+        action()
+    except (Exception, KeyboardInterrupt) as error:
+        errors.append(error_text(error))
+
+
+def cleanup_verified_vm(state, run_id, directory, *, workload_attempted, errors):
+    """Re-prove current ownership before any diagnostics or fixture commands."""
+    try:
+        current = inventory()
+        if current is None or current.get("state") != "Running":
+            # exec may start a stopped VM on some Multipass versions. Do not
+            # restart it to finish cleanup, but report the incomplete steps.
+            vm_state = "absent" if current is None else current.get("state", "unknown")
+            required = "diagnostics and run-specific fixture cleanup" if workload_attempted else "diagnostics"
+            errors.append(f"VM is {vm_state}; unable to complete {required}.")
+            return
+        verify_identity(state)
+    except (Exception, KeyboardInterrupt) as error:
+        errors.append(error_text(error))
+        return
+    cleanup_step(lambda: collect_diagnostics(run_id, directory), errors)
+    if workload_attempted:
+        cleanup_step(lambda: cleanup_workload(run_id, directory), errors)
+    # Diagnostics/fixture failure must never skip ownership-checked stop.
+    cleanup_step(lambda: down(state, inventory()), errors)
+
+
+def finish_result(operation, run_id, directory, primary, cleanup_errors):
+    message = error_text(primary) if primary is not None else None
+    write_private(directory / "result.json", json.dumps({
+        "operation": operation,
+        "run_id": run_id,
+        "success": primary is None and not cleanup_errors,
+        "primary_error": message,
+        "cleanup_errors": cleanup_errors,
+        "finished_utc": datetime.now(timezone.utc).isoformat(),
+    }, indent=2) + "\n")
+    print(f"Private {operation} results: {directory}", flush=True)
+    if primary is not None or cleanup_errors:
+        details = message or "The workload completed, but cleanup or diagnostics failed."
+        if cleanup_errors:
+            details += " Cleanup/diagnostics errors: " + "; ".join(cleanup_errors)
+        if isinstance(primary, (KeyboardInterrupt, LabInterrupted)):
+            details += " A Multipass operation may continue in the background; inspect lab-status before retrying."
+        if isinstance(primary, LabInterrupted):
+            code = 128 + primary.signum
+        elif isinstance(primary, KeyboardInterrupt):
+            code = 130
+        else:
+            code = 1
+        raise LabError(details, exit_code=code)
+
+
+def test_lab(state, existing):
+    if state is None and existing is None:
+        state = prepare_state()
+    run_id, directory = new_results("test")
+    identity_verified = False
+    workload_attempted = False
+    primary = None
+    cleanup_errors = []
+    try:
+        state = start_owned(state, existing)
+        identity_verified = True
+        check_ready(state, wait=True)
+        if ensure_baseline(state):
+            identity_verified = False
+            state = start_owned(state, inventory())
+            identity_verified = True
+            check_ready(state, wait=True)
+        workload_attempted = True
+        run_workload(run_id, directory)
+    except (Exception, KeyboardInterrupt) as error:
+        primary = error
+    finally:
+        with interrupt_handling(cleanup=True):
+            if identity_verified:
+                cleanup_verified_vm(state, run_id, directory, workload_attempted=workload_attempted, errors=cleanup_errors)
+    finish_result("test", run_id, directory, primary, cleanup_errors)
+    print(f"{VM}: infrastructure smoke passed; run resources removed and VM stopped.")
+
+
+def reset(state, existing):
+    if state is None or existing is None:
+        raise LabError("The owned VM and its recorded baseline must exist before lab-reset.")
+    run_id, directory = new_results("reset")
+    identity_verified = False
+    primary = None
+    cleanup_errors = []
+    try:
+        verify_baseline(state)
+        # Identity-only start deliberately permits repairing broken Docker or
+        # cloud-init health. Never restore when owner, pin, or mounts are unsafe.
+        state = start_owned(state, existing)
+        identity_verified = True
+        check_no_mounts(instance_info())
+        down(state, inventory())
+        verify_baseline(state)
+        check_no_mounts(instance_info())
+        identity_verified = False
+        multipass(
+            "restore", "--destructive", f"{VM}.{state['baseline']['name']}",
+            label="Recorded clean baseline restore", timeout=240, log_path=directory / "restore.log",
+        )
+        state = start_owned(state, inventory())
+        identity_verified = True
+        check_ready(state, wait=True)
+    except (Exception, KeyboardInterrupt) as error:
+        primary = error
+    finally:
+        with interrupt_handling(cleanup=True):
+            if identity_verified:
+                cleanup_verified_vm(state, run_id, directory, workload_attempted=False, errors=cleanup_errors)
+    finish_result("reset", run_id, directory, primary, cleanup_errors)
+    print(f"{VM}: clean baseline v{BASELINE_VERSION} restored, identity/readiness verified, VM stopped.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("up", "down", "status"))
+    parser.add_argument("command", choices=("up", "down", "status", "test", "reset"))
     arguments = parser.parse_args()
     os.umask(0o077)
     state = None
@@ -446,16 +768,16 @@ def main():
         for command in ("multipass", "ssh", "ssh-keygen"):
             if shutil.which(command) is None:
                 raise LabError(f"Missing prerequisite: {command}. Install Multipass separately from https://canonical.com/multipass/install and ensure the OpenSSH client and Python 3 are on PATH.")
-        with workspace_lock():
+        with interrupt_handling(), workspace_lock():
             state = load_state()
             existing = inventory()
-            {"up": up, "down": down, "status": status}[arguments.command](state, existing)
+            {"up": up, "down": down, "status": status, "test": test_lab, "reset": reset}[arguments.command](state, existing)
     except (LabError, OSError) as error:
         print(f"Lab error: {error}", file=sys.stderr)
-        return 1
-    except KeyboardInterrupt:
+        return error.exit_code if isinstance(error, LabError) else 1
+    except (KeyboardInterrupt, LabInterrupted) as error:
         print("Lab command interrupted. A Multipass operation may continue in the background; inspect lab-status before retrying.", file=sys.stderr)
-        return 130
+        return 128 + error.signum if isinstance(error, LabInterrupted) else 130
     return 0
 
 
