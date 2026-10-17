@@ -57,3 +57,17 @@ mcp-lab-login:
 
 mcp-lab-test:
 	$(PYTHON) tests/integration_mcp.py -v
+
+.PHONY: agent-demo-test agent-demo-up agent-demo-down agent-demo-reset
+
+agent-demo-test:
+	$(PYTHON) tools/agent_demo.py test
+
+agent-demo-up:
+	$(PYTHON) tools/agent_demo.py up
+
+agent-demo-down:
+	$(PYTHON) tools/agent_demo.py down
+
+agent-demo-reset:
+	$(PYTHON) tools/agent_demo.py reset

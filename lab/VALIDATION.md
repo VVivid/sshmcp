@@ -414,3 +414,188 @@ formatting/syntax/whitespace checks, and both ARM64 builds; rebuilt hashes match
 the live-test binaries. It inspected the raw live/Codex, reboot, no-replay,
 restoration, and preservation evidence without repeating VM or model operations.
 This approval covers checkpoint 5 only; CP6/CP7 and public HTTPS remain excluded.
+
+## Checkpoint 6 builder checks (2026-10-17)
+
+The exercise/lifecycle implementation is described in [DEMO.md](DEMO.md).
+Builder checks before fresh Translation, final checks, and independent Review:
+
+- All 32 host-only Python checks passed in 0.014s. The 14 added focused cases
+  cover real-result/host-action audit boundaries, exact skill-path resolution,
+  child-group timeout cleanup, fresh trace ancestry, Loki structured metadata,
+  histogram/unrelated-counter refusal, post-phase counter sample filtering,
+  NaN dashboard refusal, interruption/diagnostic failure ordering, explicit
+  target-only reset, absent-demo up refusal, socket symlink refusal, private
+  source redaction, and byte-cursor drainage. No unit check operates a VM,
+  network service, or model. Python syntax and whitespace checks passed.
+- Installed Codex prompt-only isolation passed with the final explicit private
+  temporary workspace root outside Git ancestry and bounded process-group
+  cleanup. Private evidence:
+  `.lab/results/20261017T153949Z-demo-isolation-check-ca75a8a498034c1abb0d75b34a3c4c56/`.
+  The actual final prompt contains no skill catalog, memory, or project
+  instructions; the isolated enabled MCP inventory contains only
+  `sshmcp-private`. Account/model/global settings were retained. Earlier failed
+  probes remain under separate result directories: they exposed plugin-only
+  transport validation, skill-root aliases, and restricted host-runtime access.
+- The real OAuth/MCP/native-SSH benchmark passed all 16 warmed `sleep 2` jobs
+  with exact individual outputs, overlapping guest execution intervals, and
+  2.754798s from host dispatch through final drainage. Concurrent warm-command
+  median was 0.829370s and maximum 0.890509s. Private raw tool/results/diagnostics:
+  `.lab/results/20261017T153210Z-demo-benchmark-8099aabcff4441159c3ebfde9340622f/`.
+  Its fresh-target inspection found no Docker binary/packages/data or Go/app
+  deployment artifacts. Connection cleanup and diagnostics succeeded; cleanup
+  errors were empty and both VMs were stopped. The benchmark preceded the final
+  shorter per-request benchmark timeout, parallel disconnect cleanup, and
+  summary counters; the shared wire/auth/cursor protocol was unchanged.
+- Before/after comparisons matched both owners, original baselines, pins,
+  management-key/config bytes, private account file, and global Codex config.
+  The private comparison records live in `.lab/demo/developer-preservation-*.json`.
+
+These checks did not reset a baseline, install target Docker or application
+files, run a deployment/troubleshooting model session, inject a telemetry fault,
+or query a live application LGTM backend. Dashboard/API acceptance, controlled
+fault effectiveness, fresh repair, private credential export, demo resume, and
+the full handled-interruption path during a real actor remain checkpoint-7
+validation. No demo-ready or actor-attempt pointer was created. There is no
+dedicated Tester for checkpoint 6; fresh Translation, final checks, and independent
+Review are still required before its commit.
+
+## Checkpoint 6 diagnostic and operator transport corrections (2026-10-17)
+
+Fresh Translation identified a diagnostic assignment outside its container
+loop. The new host-only regression reproduced an empty-container `NameError`
+and loss of all but the last container's log evidence before the correction.
+Diagnostics now retain an explicit container map, preserve `docker ps` evidence
+with zero demo containers, and skip deployment inspection/export for that empty
+state. The regression executes the actual embedded Python with stubbed Docker
+process results for zero, three, and ten containers. It verifies distinct
+stdout/stderr/exit results, the eight-container/100-line log limit, and the
+existing per-command/operator deadlines. Existing primary/diagnostic-error and
+evidence-before-shutdown checks continue to pass.
+
+The operator helper now performs target application inspection, container logs,
+fault injection, and source export through separate recorded MCP connections
+using only `connect`, `run_command`, and `disconnect`. The operator's Python
+input and idempotency key are saved before dispatch; private MCP transcripts,
+raw output streams, latest job state, timing, and separate primary/disconnect
+errors remain under `operator/`. Uncertain executes are not replayed. Both
+output streams retain the finite 8 MiB bound; overflow saves an explicitly
+marked prefix and fails. Ownership/provisioning checks, SSH forwarding, and
+fixed VM/service diagnostics remain management infrastructure, with no
+management-SSH application fallback. Operator results do not count as actor or
+benchmark evidence.
+
+All 41 host-only checks passed in 0.039s, including eight new mocked operator
+checks for quoting/private evidence, ownership refusal, uncertain execution,
+primary plus disconnect failures, unclosed disconnect, signal preservation,
+output bounds, and terminal job acceptance. Python syntax checks for all tool
+and test modules and whitespace checks passed. No VM, Docker process, network
+service, or actor/model was operated for this correction. The earlier live
+benchmark/fresh-target evidence predates this operator transport change; it
+does not validate the new helper path. Live deployment/fault/repair acceptance
+remains checkpoint 7. Fresh Translation, final validation, and independent
+Review are still required for checkpoint 6; there is no dedicated Tester.
+
+## Checkpoint 6 final translated validation (2026-10-17)
+
+Fresh Translation reformatted only the five embedded operator scripts. Their
+syntax trees and the outer module's syntax tree were unchanged. Coordinator
+final checks passed all 41 host tests, Python/shell syntax, Go formatting,
+race/vet checks, both ARM64 builds, and whitespace checks.
+
+The explicit `agent-demo-reset` command restored only the target baseline,
+verified its identity/readiness, and stopped it. Owners, original baseline
+records, keys, host pins, accounts, and global Codex configuration matched the
+saved fingerprints; the control profile was preserved. Private evidence:
+`.lab/results/20261017T155603Z-demo-reset-8f1773547955477e84cda5fdd82f9b5e/`
+and `.lab/target/results/20261017T155603Z-reset-ccbc56be6e5c4a7dbb37059ff6b82f82/`.
+
+Final installed-client prompt isolation passed without a model run in
+`.lab/results/20261017T155734Z-demo-isolation-check-c5eb1107a4a7449f8ad152e587fe5486/`.
+The final real benchmark passed after current-build installation: all sixteen
+warmed two-second jobs overlapped and drained in **2.128980s**. Concurrent warm
+command median was **0.157188s**, maximum **0.182186s**; 652 MCP tool calls were
+recorded with zero transport errors. Fresh-target inspection and container
+diagnostics completed through the new MCP operator helper with recorded
+connect/execute/status/disconnect evidence and no cleanup errors. No Docker,
+application files, or Docker data existed on the target.
+
+Private final evidence:
+`.lab/results/20261017T155754Z-demo-benchmark-2264d5e2b1c14dd6b6bb9b3cf7822a7f/`.
+Both VM/service logs were collected before shutdown. Independent final inventory
+showed both VMs stopped with empty mounts. Owners, baselines, keys, host pins,
+management configurations, accounts, and global settings matched the saved
+before/after fingerprints in `.lab/demo/cp6-final-{before,after}.json`.
+
+No deployment/troubleshooting model session, Docker/app installation, telemetry
+fault, live LGTM query, or actual application-source export occurred. Those
+acceptance paths remain checkpoint 7. Independent Review is the final CP6 gate;
+no dedicated Tester was used for this checkpoint.
+
+## Checkpoint 6 counter, actor quota, and dashboard corrections (2026-10-17)
+
+The independent review found that the pinned Prometheus 3.15 metadata endpoint
+only enumerates scrape targets, so valid LGTM OTLP counters could never satisfy
+the earlier type check. The deployment brief now declares one additional
+component constraint: enable Prometheus's `type-and-unit-labels` feature. The
+evaluator checks the live backend's feature flags and requires its reserved
+`__type__="counter"` label, retaining that type and the service attribution in
+each sampled selector. Exact received metric names, including `_total`, remain
+unchanged. The legacy metadata API is no longer needed. Histogram counts,
+gauges, missing type labels, and unrelated services are rejected; fresh sample
+timestamps and the full independent twelve-request counter increase still
+remain necessary.
+
+This choice follows the pinned [metadata API implementation](https://github.com/prometheus/prometheus/blob/v3.15.0/web/api/v1/api.go),
+[type-label contract](https://github.com/prometheus/prometheus/blob/v3.15.0/docs/feature_flags.md#type-and-unit-labels),
+[OTLP type mapping](https://github.com/prometheus/prometheus/blob/v3.15.0/storage/remote/otlptranslator/prometheusremotewrite/otlp_to_openmetrics_metadata.go),
+and [reserved-label assignment](https://github.com/prometheus/prometheus/blob/v3.15.0/storage/remote/otlptranslator/prometheusremotewrite/helper.go).
+The mapping classifies cumulative monotonic sums as counters, nonmonotonic sums
+and gauges as gauges, and histograms as histograms. Native delta sums receive
+unknown type and cannot satisfy cumulative-counter acceptance. The pinned
+[LGTM launcher](https://github.com/grafana/docker-otel-lgtm/blob/v0.37.0/docker/run-prometheus.sh)
+supports extra Prometheus arguments. No application source, Compose recipe, or
+collector configuration was supplied to an actor by this correction.
+
+Actor and prompt-probe capture now drains stdout/stderr through separate bounded
+pipes while delivering stdin without blocking the output readers. Each stream
+retains at most 8 MiB. The first excess byte fails the operation, terminates its
+own child process group, and marks the byte counts/prefix as incomplete in the
+private process record. Transcript audit reads incrementally and independently
+enforces the total byte quota, including for oversized files with otherwise
+complete successful-session prefixes. Dashboard acceptance records distinct
+application/proxy log checks from fresh, populated backend-returned streams.
+Application logs alone, empty or stale proxy streams, and other services fail.
+
+All 49 host-only Python tests passed, including the added OTLP-without-scrape-
+metadata positive case, missing-feature refusal before polling, counter-type
+negatives, full burst-delta positive/negative cases, per-stream byte overflow,
+exact-limit multibyte output, large stdin with simultaneous output drainage,
+bounded transcript audit, and proxy-dashboard coverage. Capture tests run only
+local Python subprocesses; a real descendant ignoring SIGTERM stopped after
+the exact owned process group received SIGKILL. `make runner-check` passed the
+Go race suite (cached) and vet. Python syntax, both lab shell syntax checks, and
+whitespace checks passed.
+
+No VM, Docker process, model/actor session, baseline reset, deployment, or live
+application/backend query was operated for this correction. Existing private
+lab evidence was preserved. The previous live benchmark predates these edits;
+it does not prove the new capture or backend paths. Actual typed OTLP backend
+responses, dashboard queries, controlled fault, fresh repair, and resume remain
+checkpoint-7 acceptance work. Fresh Translation, final validation, and a fresh
+independent Review are still required before checkpoint 6 can complete.
+
+Fresh Translation inspected the corrected files without edits and independently
+passed all 49 host tests. Coordinator final validation also passed all 49 tests,
+Python/shell syntax, whitespace checks, and cached Go race tests plus vet.
+The installed-client isolation check passed using the final bounded capture,
+without a model call or VM operation. Its private evidence is
+`.lab/results/20261017T162008Z-demo-isolation-check-ad6495a857ba44ea8934bdb82fb36a5b/`.
+This confirms real inventory/prompt capture after the quota change; live OTLP
+ingestion and the two actual actor exercises remain checkpoint 7.
+
+Fresh independent Review found no actionable issues and returned **Approved**.
+It independently passed all 49 host tests, Python/shell syntax, whitespace,
+and Go race/vet checks (race results cached), inspected the saved benchmark,
+isolation and preservation evidence, and checked the pinned Prometheus type-label
+contract. No dedicated Tester or deployment/model operation was used for CP6.

@@ -9,15 +9,12 @@ stops both ownership-verified VMs. Evidence is private under .lab/results/.
 
 import base64
 from concurrent.futures import ThreadPoolExecutor
-import itertools
 import json
 from pathlib import Path
 import sys
-import threading
 import time
 import unittest
 import urllib.error
-import urllib.request
 import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -26,52 +23,7 @@ import lab_oauth
 import mcp_lab
 
 
-class MCPClient:
-    def __init__(self, account="admin", scope="sshmcp:admin"):
-        self.token = lab_oauth.tokens(account, scope)
-        self.expires = time.monotonic() + self.token["expires_in"]
-        self.ids = itertools.count(1)
-        self.refresh_lock = threading.Lock()
-
-    def request(self, method, params=None, token=None):
-        with self.refresh_lock:
-            if token is None and time.monotonic() > self.expires - 5:
-                result = lab_oauth.token_request({"grant_type": "refresh_token", "refresh_token": self.token["refresh_token"], "resource": mcp_lab.RESOURCE})
-                if "access_token" not in result:
-                    raise AssertionError("OAuth refresh rejected: " + result.get("error", "unknown"))
-                self.token = result
-                self.expires = time.monotonic() + result["expires_in"]
-        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2026-07-28", "Mcp-Method": method}
-        if method == "tools/call":
-            headers["Mcp-Name"] = params["name"]
-        if token != "":
-            headers["Authorization"] = "Bearer " + (self.token["access_token"] if token is None else token)
-        params = dict(params or {})
-        params["_meta"] = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}, "io.modelcontextprotocol/clientInfo": {"name": "cp5-integration", "version": "1"}}
-        request = urllib.request.Request(mcp_lab.RESOURCE, data=json.dumps({"jsonrpc": "2.0", "id": next(self.ids), "method": method, "params": params}).encode(), headers=headers)
-        try:
-            with urllib.request.urlopen(request, timeout=40) as response:
-                result = json.load(response)
-        except urllib.error.HTTPError as error:
-            error.close()
-            raise
-        if "error" in result:
-            raise AssertionError(result["error"])
-        return result["result"]
-
-    def tool(self, name, expected_error=None, **arguments):
-        result = self.request("tools/call", {"name": name, "arguments": arguments})
-        body = result.get("structuredContent") or json.loads(result["content"][0]["text"])
-        if expected_error:
-            if not result.get("isError") or body.get("code") != expected_error:
-                raise AssertionError((expected_error, result))
-        elif result.get("isError"):
-            raise AssertionError(body)
-        return body
-
-
-def stream_bytes(stream):
-    return stream["text"].encode() if stream["encoding"] == "utf-8" else base64.b64decode(stream["base64"])
+from mcp_client import MCPClient, stream_bytes
 
 
 class PrivateMCPTest(unittest.TestCase):

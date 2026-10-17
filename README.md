@@ -7,8 +7,9 @@ account with its own generated SSH key, noninteractive sudo, and a lingering
 systemd user manager.
 
 The target profile provides persistent native Bash connections, durable jobs,
-bounded output, idempotency, and independent cancellation. MCP transport, OAuth,
-and the gateway remain future checkpoints. The control lab keeps its original
+bounded output, idempotency, and independent cancellation. The private MCP gateway
+and OAuth run on the control VM. A fresh-agent deployment/repair lifecycle and
+independent evaluator are available as an explicit exercise. The control lab keeps its original
 Docker/Compose infrastructure fixture.
 
 ## Requirements
@@ -246,11 +247,15 @@ between fresh provisions.
 5. **Private authenticated MCP:** official Go SDK gateway, three tools, native
    SSH, private Keycloak/Postgres, local Codex OAuth, and an opt-in integration
    suite. Run `make mcp-lab-up`; see [lab/MCP.md](lab/MCP.md) for login and contracts.
+6. **Simulation and evaluator:** `make agent-demo-test`, `agent-demo-up`,
+   `agent-demo-down`, and explicit target-only `agent-demo-reset`; fresh isolated
+   actors, separate fault operator, real telemetry evaluation, and private evidence
+   exports. See [lab/DEMO.md](lab/DEMO.md).
 
 Checkpoints 1–3 implement the original control infrastructure. Checkpoint 4 adds
 the target runner and its focused checks. Checkpoint 5 adds private authenticated
-MCP access. Fresh-agent application deployment and independent acceptance remain
-later checkpoints. A passing default `lab-test` continues to cover only the
+MCP access. Checkpoint 6 supplies the exercise machinery; an actual fresh-agent
+application deployment and repair acceptance run remains checkpoint 7. A passing default `lab-test` continues to cover only the
 control infrastructure fixture.
 
 ## Development checks
