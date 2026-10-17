@@ -1,0 +1,72 @@
+#cloud-config
+# Rendered by tools/lab.py. Only the generated PUBLIC SSH key enters the VM.
+users:
+  - default
+  - name: mcp-test
+    gecos: SSHMCP lab account
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - @@PUBLIC_KEY@@
+ssh_pwauth: false
+disable_root: true
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - openssh-server
+write_files:
+  - path: /etc/sshmcp-lab/owner
+    owner: root:root
+    permissions: '0o600'
+    content: |
+      @@OWNER@@
+  - path: /etc/ssh/sshd_config.d/00-sshmcp-test.conf
+    owner: root:root
+    permissions: '0o644'
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+  - path: /usr/local/sbin/sshmcp-provision-v1
+    owner: root:root
+    permissions: '0o700'
+    content: |
+      #!/bin/sh
+      set -eu
+      export DEBIAN_FRONTEND=noninteractive
+      . /etc/os-release
+      test "$ID" = ubuntu
+      test "$VERSION_ID" = 24.04
+      test "$(dpkg --print-architecture)" = arm64
+      install -d -m 0755 /etc/apt/keyrings
+      curl --fail --silent --show-error --location --retry 3 \
+        --connect-timeout 15 --max-time 120 \
+        https://download.docker.com/linux/ubuntu/gpg \
+        -o /etc/apt/keyrings/docker.asc
+      chmod 0644 /etc/apt/keyrings/docker.asc
+      cat > /etc/apt/sources.list.d/docker.sources <<EOF
+      Types: deb
+      URIs: https://download.docker.com/linux/ubuntu
+      Suites: noble
+      Components: stable
+      Architectures: arm64
+      Signed-By: /etc/apt/keyrings/docker.asc
+      EOF
+      apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 \
+        -o Acquire::https::Timeout=30 update
+      apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 \
+        -o Acquire::https::Timeout=30 install -y \
+        docker-ce docker-ce-cli containerd.io \
+        docker-buildx-plugin docker-compose-plugin
+      install -d -m 0755 /run/sshd
+      /usr/sbin/sshd -t
+      systemctl enable --now ssh.service docker.service
+      systemctl restart ssh.service
+      loginctl enable-linger mcp-test
+      test_uid=$(id -u mcp-test)
+      systemctl start "user@${test_uid}.service"
+      printf '1\n' > /etc/sshmcp-lab/provisioned
+runcmd:
+  - [/usr/local/sbin/sshmcp-provision-v1]
