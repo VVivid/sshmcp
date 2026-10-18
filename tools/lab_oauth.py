@@ -112,11 +112,11 @@ def authorization_code(account="admin", resource=mcp_lab.RESOURCE, scope="sshmcp
     return parameters, verifier
 
 
-def token_request(fields):
+def token_request(fields, *, timeout=10):
     fields = dict(fields, client_id=mcp_lab.CLIENT)
     request = urllib.request.Request(mcp_lab.ISSUER + "/protocol/openid-connect/token", data=urllib.parse.urlencode(fields, doseq=True).encode())
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
         with error:

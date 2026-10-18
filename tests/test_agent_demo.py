@@ -11,6 +11,7 @@ import signal
 from subprocess import CompletedProcess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import call, patch
@@ -42,6 +43,7 @@ class ActorBoundaryTest(unittest.TestCase):
             for feature in ("code_mode", "shell_tool", "apps", "computer_use", "browser_use", "view_image"):
                 self.assertIn(("--disable", feature), pairs)
             self.assertNotIn(("--disable", "code_mode_host"), pairs)
+            self.assertIn("mcp_servers.sshmcp-private.required=true", arguments)
             self.assertFalse(any(argument.startswith("tools.view_image=") for argument in arguments))
 
     def test_skill_aliases_expand_to_exact_files_and_unresolved_aliases_fail(self):
@@ -51,6 +53,80 @@ class ActorBoundaryTest(unittest.TestCase):
             actor.catalog_paths("- unknown (file: r9/example/SKILL.md)")
         with self.assertRaises(lab.LabError):
             actor.assert_isolated([{"content": [{"text": "## Skills\nAvailable skills"}]}])
+
+    def test_failed_local_preflight_prevents_prompt_or_model_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            with patch.object(actor, "new_workspace", return_value=folder), \
+                 patch.object(actor, "preflight", side_effect=lab.LabError("not authenticated")), \
+                 patch.object(actor, "isolated_arguments") as isolate, patch.object(actor, "capture") as launch:
+                with self.assertRaisesRegex(lab.LabError, "not authenticated"):
+                    actor.run_actor(folder, "fresh", "goal")
+            isolate.assert_not_called()
+            launch.assert_not_called()
+            self.assertEqual(json.loads((folder / "fresh/outcome.json").read_text())["failure_category"], "preflight")
+
+    def test_preflight_requires_cli_auth_and_exact_authenticated_catalog(self):
+        for auth_exit, names, expected in ((1, [], "authentication"), (0, ["connect", "run_command", "disconnect", "extra"], "mcp_catalog"),
+                                           (0, ["connect", "run_command", "disconnect", "connect"], "mcp_catalog"),
+                                           (0, ["connect", "run_command", "disconnect"], None)):
+            with self.subTest(auth_exit=auth_exit, names=names), tempfile.TemporaryDirectory() as temporary:
+                folder = Path(temporary)
+
+                def capture(command, directory, name, **kwargs):
+                    (directory / (name + ".jsonl")).write_text("codex-cli 0.162.1\n" if name == "cli-version" else "")
+                    return {"exit_code": auth_exit if name == "cli-auth" else 0}
+
+                with patch.object(actor.shutil, "which", return_value="/installed/codex"), patch.object(actor, "capture", side_effect=capture), \
+                     patch("mcp_client.MCPClient") as client:
+                    client.return_value.request.return_value = {"tools": [{"name": name} for name in names]}
+                    if expected:
+                        with self.assertRaises(lab.LabError):
+                            actor.preflight(folder, folder)
+                    else:
+                        result = actor.preflight(folder, folder)
+                        self.assertTrue(result["required_mcp"])
+                        self.assertEqual(result["quota"], "unknown")
+                    if auth_exit:
+                        client.assert_not_called()
+                record = json.loads((folder / "preflight.json").read_text())
+                self.assertEqual(record.get("failure_category"), expected)
+
+    def test_private_output_and_progress_are_visible_before_child_exit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            line = json.dumps({"type": "thread.started", "thread_id": "private-secret-text"}) + "\n"
+            script = ("import json,os,pathlib,sys,time\n"
+                      f"root=pathlib.Path({str(folder)!r})\n"
+                      f"sys.stdout.write({line!r});sys.stdout.flush()\n"
+                      "sys.stderr.write('private stderr');sys.stderr.flush()\n"
+                      "deadline=time.monotonic()+2\n"
+                      "while time.monotonic()<deadline:\n"
+                      " try:\n"
+                      "  record=json.loads((root/'actor.process.json').read_text())\n"
+                      "  if (record['running'] and record['pid']==os.getpid() and record['event_types'].get('thread.started')==1 "
+                      "and (root/'actor.jsonl').read_text() and (root/'actor.stderr.log').read_text()=='private stderr'):sys.exit(0)\n"
+                      " except (OSError,ValueError,KeyError):pass\n"
+                      " time.sleep(.01)\n"
+                      "sys.exit(3)\n")
+            visible = StringIO()
+            with redirect_stdout(visible):
+                result = actor.capture([sys.executable, "-c", script], folder, "actor", cwd=folder, timeout=4)
+            self.assertEqual(result["exit_code"], 0, "child could not read its retained stdout/stderr and live metadata before exit")
+            self.assertFalse(result["running"])
+            self.assertNotIn("private-secret-text", visible.getvalue())
+            self.assertNotIn("private stderr", visible.getvalue())
+
+    def test_observer_cancellation_stops_owned_child_without_waiting_for_session_deadline(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            cancel = threading.Event()
+            cancel.set()
+            with self.assertRaisesRegex(lab.LabError, "fault observer failed"):
+                actor.capture([sys.executable, "-c", "import time;time.sleep(60)"], folder, "actor", cwd=folder, cancel_event=cancel)
+            record = json.loads((folder / "actor.process.json").read_text())
+            self.assertFalse(record["running"])
+            self.assertLess(record["duration_seconds"], 5)
 
     def transcript(self, path, *, host_action=False, completed=True):
         def call(identity, tool, args, body):
@@ -94,6 +170,20 @@ class ActorBoundaryTest(unittest.TestCase):
             path.write_text("\n".join(json.dumps(event) for event in events))
             with self.assertRaisesRegex(lab.LabError, "disallowed host action"):
                 actor.audit_transcript(path)
+
+    def test_uncertain_execute_is_counted_when_the_same_key_is_retried(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "actor.jsonl"
+            self.transcript(path)
+            events = [json.loads(line) for line in path.read_text().splitlines()]
+            failed = json.loads(json.dumps(events[2]))
+            failed["item"].update(id="uncertain", status="failed", error={"message": "transport closed"}, result=None)
+            events.insert(2, failed)
+            path.write_text("\n".join(map(json.dumps, events)))
+            result = actor.audit_transcript(path)
+            self.assertEqual(result["tool_errors"], 1)
+            self.assertEqual(result["repeated_execute_keys"], 1)
+            self.assertEqual(result["repeated_source_submissions"], 1)
 
     def test_disconnect_accepts_only_same_idle_terminal_connection_results(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -676,6 +766,14 @@ class SharedMCPClientTest(unittest.TestCase):
         self.assertEqual(stdout, "é".encode())
         self.assertEqual(stderr, b"e")
         self.assertEqual((calls[1]["stdout_cursor"], calls[1]["stderr_cursor"]), (1, 1))
+        self.assertTrue(all(0 <= args["wait_ms"] <= 1000 for args in calls))
+        self.assertEqual(calls[0]["request_deadline"], calls[1]["request_deadline"])
+
+    def test_expired_outer_deadline_does_not_dispatch_another_status(self):
+        client = object.__new__(MCPClient)
+        with patch.object(client, "tool", create=True) as tool, self.assertRaisesRegex(lab.LabError, "deadline"):
+            client.wait("job", timeout=0)
+        tool.assert_not_called()
 
 
 if __name__ == "__main__":

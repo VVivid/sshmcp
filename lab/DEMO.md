@@ -36,6 +36,66 @@ make agent-demo-up
 make agent-demo-reset
 ```
 
+The separate operations exercise reuses an already accepted deployment:
+
+```sh
+make agent-demo-operations-test
+```
+
+It starts the existing owned disks and infrastructure, discovers the application
+directory/configuration from Compose labels, and captures the running image,
+source/config hashes, exact `/version` response, and a fresh full telemetry
+baseline. It supplies no application source, build command, Compose recipe, or
+prepared release to the actors. Three independent fresh sessions then:
+
+1. Implement `/version` with a unique per-run response while preserving the old
+   image and original source/configuration in an actor-created private release
+   directory. A small `release.json` indexes the actor's own saved paths/hashes;
+   the independent operator checks those bytes against the pre-upgrade capture.
+2. Roll back to the exact original runtime image ID, source/config hash set,
+   and prior `/version` status/body. Rebuilding similar source is insufficient.
+3. Stage/build another unique version, then activate it with one supplied
+   idempotency key and `wait_ms=10000`. That same final job appends/emits a unique
+   readiness line and waits 25 seconds before activation. An independent MCP
+   observer requires the original job to be running, the line to be present,
+   and the execute call still to be in flight before stopping the gateway.
+
+The gateway outage lasts at least four seconds. Management SSH controls only
+that fixed gateway service using ownership-checked SSH arguments captured on
+the main thread. No background task selects the process-global lab profile.
+An actual MCP transport failure is retained; the gateway is restored in a
+bounded `finally`, and read-only lookup must find the same original job still
+running. The actor must reconcile the lost acknowledgement using the original
+key and job ID, drain the original completed job, and leave exactly one receipt
+line. New-key replay and other execute jobs before reconciliation fail the
+exercise. Exact same-key deduplication is recorded as a visible retry; hidden
+CLI transport retries are reported as unavailable, never assumed to be zero.
+Observer failure cancels the owned actor promptly; restoration/join complete
+before outer diagnostics and VM shutdown.
+
+Each phase independently repeats the full fresh trace ancestry, correlated Go
+logs, proxy JSON, genuine counter increase, and dashboard checks below. It also
+requires unchanged Traefik/LGTM container IDs, unchanged named volumes, and the
+accepted historical trace/log probe still present. New counter baselines allow
+an app process restart without accepting stale samples. Actor process duration,
+tool/error/retry counts, original interrupted job/key, outage interval, receipt,
+and zero automated human interventions are retained per run. Global Codex
+model/config fingerprints are observed before/after, without changing settings.
+
+Success leaves both VMs and the final demo running and advances only the demo
+ready pointer; the original attempt and all prior evidence stay intact.
+Failure/interruption saves primary and cleanup errors, collects diagnostics,
+and attempts to stop both VMs. The harness never restores a baseline or coaches
+a failed session. Separate private failed-attempt records preserve each original
+baseline. A repeat against the same accepted demo independently requires the
+current image, source/config hashes, and HTTP response to match that saved
+baseline before a fresh actor can run. A mismatch needs a separate recorded MCP
+recovery operation; there is no manual approval flag or automatic redeployment.
+Each operations export is separate
+under its new private result directory, includes bounded Python source capture,
+and uses the same secret redaction rules. The old `examples/agent-demo` snapshot
+and its provenance are not rewritten.
+
 - `test` starts/checks the existing owned VMs, proves the target has no Docker or
   application artifacts, runs the real MCP benchmark, launches both actors with
   independent evaluation/fault phases, and exports evidence. It never resets a
@@ -143,6 +203,18 @@ the child runs. Overflow rejects the operation and stops its exact process
 group; the private process record marks retained byte prefixes as incomplete.
 The transcript audit reads bounded lines incrementally and enforces the total
 byte quota again, so a complete-looking prefix of an oversized file cannot pass.
+Before isolation, the launcher checks the installed CLI version and login
+status and fetches an authenticated catalog containing exactly the three tools.
+The supported CLI contract starts at the verified `0.162.1`; the private MCP is
+marked `required=true` for the invocation so initialization failure stops exec.
+These checks make no model request and do not change login/account/model
+configuration. Available model quota is explicitly unknown; authentication,
+quota, launch, and tool/transport failures remain distinguishable in private
+outcomes. There is no automatic quota reset, account switch, or purchase.
+Every captured stdout/stderr chunk is flushed to private bounded evidence, and
+process metadata records a live heartbeat, elapsed time, byte counts and event/
+tool counts. Console progress contains only coarse phases/counts/event types;
+it does not print model text, source, tool arguments, or credentials.
 
 ## Evidence and developer checks
 
@@ -187,7 +259,7 @@ These focused developer commands do not run deployment/troubleshooting models:
 
 ```sh
 python3 -m unittest discover -s tests -v
-python3 -m py_compile tools/agent_demo.py tools/demo_actor.py tools/demo_evaluator.py tools/mcp_client.py
+python3 -m py_compile tools/agent_demo.py tools/demo_actor.py tools/demo_evaluator.py tools/demo_operations.py tools/mcp_client.py
 python3 tools/agent_demo.py isolation-check
 python3 tools/agent_demo.py benchmark
 ```

@@ -256,6 +256,13 @@ between fresh provisions.
    fresh repair. The [actual source and report](examples/agent-demo/README.md)
    preserve all five earlier failed attempts and the agent-created snapshot.
 
+The separate opt-in `make agent-demo-operations-test` reuses that accepted demo
+for three fresh upgrade, exact rollback, and interrupted activation actors.
+Its [operations contract](lab/DEMO.md#commands-and-state) requires independent
+version/image/source, telemetry, persistence, and original-job recovery evidence;
+it does not reset or seed the target. Implemented machinery and live acceptance
+remain separate checkpoints.
+
 Checkpoints 1–3 implement the original control infrastructure. Checkpoint 4 adds
 the target runner and its focused checks. Checkpoint 5 adds private authenticated
 MCP access. Checkpoint 6 supplies the exercise machinery; checkpoint 7 records

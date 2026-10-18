@@ -368,7 +368,7 @@ def redact(text, secrets):
     return re.sub(pattern, lambda match: match[0] if match[2].startswith(("${", "$", "[REDACTED]")) else match[1] + "[REDACTED]", text)
 
 
-def export_sources(directory, containers):
+def export_sources(directory, containers, *, include_python=False):
     labels = containers["app"]["Config"]["Labels"]
     root = labels.get("com.docker.compose.project.working_dir", "")
     for container in containers.values():
@@ -377,7 +377,10 @@ def export_sources(directory, containers):
         for mount in container.get("Mounts", []):
             if mount["Type"] == "bind" and mount.get("Destination", "").startswith(("/data", "/var/lib", "/var/log")):
                 raise lab.LabError("Demo data/logs must use named volumes, separate from source/config export.")
-    original = operator(directory, "source-export", EXPORT_SCRIPT % root)
+    script = EXPORT_SCRIPT
+    if include_python:
+        script = script.replace("suffixes = {'.go'", "suffixes = {'.py', '.go'", 1)
+    original = operator(directory, "source-export", script % root)
     if not any(item["path"].endswith(".go") for item in original["files"]):
         raise lab.LabError("Actual agent-created export contains no Go source.")
     secrets = [value for container in containers.values() for key, value in environment(container).items() if re.search("PASSWORD|SECRET|TOKEN|API_KEY", key) and len(value) >= 8]
