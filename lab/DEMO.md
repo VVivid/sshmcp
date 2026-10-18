@@ -51,7 +51,13 @@ prepared release to the actors. Three independent fresh sessions then:
 1. Implement `/version` with a unique per-run response while preserving the old
    image and original source/configuration in an actor-created private release
    directory. A small `release.json` indexes the actor's own saved paths/hashes;
-   the independent operator checks those bytes against the pre-upgrade capture.
+   the independent operator checks every captured file against its pre-upgrade
+   hash. Additional safe relative snapshots may preserve other existing text
+   files: their actual UTF-8 bytes must match their declared hashes and, when
+   still present, their current originals. These extras are counted separately
+   because they lack independent pre-upgrade hashes. All snapshots reject
+   symlinks and duplicate paths and share the 128-file, 256-KiB-per-file,
+   4-MiB-total bounds.
 2. Roll back to the exact original runtime image ID, source/config hash set,
    and prior `/version` status/body. Rebuilding similar source is insufficient.
 3. Stage/build another unique version, then activate it with one supplied

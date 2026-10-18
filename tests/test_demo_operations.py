@@ -118,8 +118,8 @@ class OperationsAcceptanceTest(unittest.TestCase):
         history.assert_called_once_with(factory.return_value, {"marker": "old"})
         self.assertEqual(proof["fresh"]["probe"]["trace_id"], "fresh")
 
-    def test_release_manifest_claim_cannot_replace_actual_preserved_bytes(self):
-        release = self.directory / "actor-preserved"
+    def release_fixture(self):
+        release = self.directory.resolve() / "actor-preserved"
         release.mkdir(mode=0o700)
         source = release / "old.go"
         source.write_text("original app")
@@ -128,8 +128,12 @@ class OperationsAcceptanceTest(unittest.TestCase):
         record = release / "release.json"
         record.write_text(json.dumps(manifest))
         record.chmod(0o600)
-        original = {"image_id": "sha256:old", "files": [{"path": "main.go", "sha256": digest}]}
+        source_root = self.directory.resolve() / "active-source"
+        source_root.mkdir()
+        original = {"root": str(source_root), "image_id": "sha256:old", "files": [{"path": "main.go", "sha256": digest}]}
+        return release, manifest, original
 
+    def verify_fixture_release(self, release, original):
         def operator(directory, name, script):
             output = StringIO()
             with patch("subprocess.check_output", return_value='[{"Id":"sha256:old"}]'), redirect_stdout(output):
@@ -137,10 +141,89 @@ class OperationsAcceptanceTest(unittest.TestCase):
             return json.loads(output.getvalue())
 
         with patch.object(demo, "operator", side_effect=operator):
-            self.assertTrue(operations.verify_release(self.directory, str(release), original)["verified"])
-            source.write_text("modified bytes, unchanged index")
-            with self.assertRaisesRegex(RuntimeError, "differs from pre-upgrade"):
-                operations.verify_release(self.directory, str(release), original)
+            return operations.verify_release(self.directory, str(release), original)
+
+    def test_release_manifest_claim_cannot_replace_actual_preserved_bytes(self):
+        release, manifest, original = self.release_fixture()
+        self.assertTrue(self.verify_fixture_release(release, original)["verified"])
+        (release / "old.go").write_text("modified bytes, unchanged index")
+        with self.assertRaisesRegex(RuntimeError, "differs from pre-upgrade"):
+            self.verify_fixture_release(release, original)
+        manifest["files"] = []
+        (release / "release.json").write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(RuntimeError, "omit pre-upgrade"):
+            self.verify_fixture_release(release, original)
+
+    def test_safe_extra_release_text_has_separate_proof_counts(self):
+        release, manifest, original = self.release_fixture()
+        extra = ".sshmcp-fault-record.json.disabled"
+        body = b'{"services":{}}\n'
+        (release / "disabled-config").write_bytes(body)
+        current = Path(original["root"]) / extra
+        current.write_bytes(body)
+        manifest["files"].append({"path": extra, "saved_path": "disabled-config", "sha256": hashlib.sha256(body).hexdigest()})
+        (release / "release.json").write_text(json.dumps(manifest))
+        result = self.verify_fixture_release(release, original)
+        self.assertEqual((result["required_files"], result["extra_files"], result["preserved_files"],
+                          result["extra_current_originals_matched"]), (1, 1, 2, 1))
+        current.unlink()
+        self.assertEqual(self.verify_fixture_release(release, original)["extra_current_originals_matched"], 0)
+        current.write_text("changed after snapshot")
+        with self.assertRaisesRegex(RuntimeError, "differs from its current original"):
+            self.verify_fixture_release(release, original)
+
+    def test_extra_release_paths_hashes_types_and_bounds_cannot_weaken_required_proof(self):
+        release, manifest, original = self.release_fixture()
+        (release / "extra").write_text("extra text")
+        extra = {"path": "extra.disabled", "saved_path": "extra", "sha256": hashlib.sha256(b"extra text").hexdigest()}
+        for field in ("path", "saved_path"):
+            for value in ("/absolute", "../escape", "nested/../../escape", "", ".", "./extra", "a//b", "a\x00b"):
+                with self.subTest(field=field, value=value):
+                    entry = dict(extra, **{field: value})
+                    (release / "release.json").write_text(json.dumps(dict(manifest, files=[*manifest["files"], entry])))
+                    with self.assertRaisesRegex(RuntimeError, "Unsafe"):
+                        self.verify_fixture_release(release, original)
+        for change in ("original-duplicate", "saved-duplicate", "hash", "saved-symlink", "original-symlink",
+                       "saved-parent-symlink", "original-parent-symlink", "directory", "utf8", "binary", "size", "count", "total"):
+            with self.subTest(change=change):
+                entry = dict(extra)
+                entries = [*manifest["files"], entry]
+                (release / "extra").unlink()
+                (release / "extra").write_text("extra text")
+                if change == "original-duplicate":
+                    entry["path"] = "main.go"
+                elif change == "saved-duplicate":
+                    entry["saved_path"] = "old.go"
+                elif change == "hash":
+                    entry["sha256"] = "invented"
+                elif change == "saved-symlink":
+                    (release / "extra").unlink()
+                    (release / "extra").symlink_to(release / "old.go")
+                elif change == "original-symlink":
+                    (Path(original["root"]) / "extra.disabled").symlink_to(release / "extra")
+                elif change.endswith("parent-symlink"):
+                    parent = release if change.startswith("saved") else Path(original["root"])
+                    (parent / "link").symlink_to(release, target_is_directory=True)
+                    entry["saved_path" if change.startswith("saved") else "path"] = "link/extra"
+                elif change == "directory":
+                    entry["saved_path"] = "folder"
+                    (release / "folder").mkdir()
+                elif change in {"utf8", "binary", "size"}:
+                    (release / "extra").write_bytes({"utf8": b"\xff", "binary": b"a\x00b", "size": b"x" * 262145}[change])
+                elif change == "count":
+                    entries = [extra] * 129
+                elif change == "total":
+                    entries = list(manifest["files"])
+                    for index in range(16):
+                        name = "large-" + str(index)
+                        (release / name).write_bytes(b"x" * 262144)
+                        entries.append({"path": name, "saved_path": name, "sha256": hashlib.sha256(b"x" * 262144).hexdigest()})
+                (release / "release.json").write_text(json.dumps(dict(manifest, files=entries)))
+                with self.assertRaises((RuntimeError, UnicodeError)):
+                    self.verify_fixture_release(release, original)
+                for path in (Path(original["root"]) / "extra.disabled", release / "link", Path(original["root"]) / "link"):
+                    if path.is_symlink():
+                        path.unlink()
 
     def test_new_python_capture_is_bounded_and_old_export_contract_is_unchanged(self):
         root = self.directory / "source"

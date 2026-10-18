@@ -154,10 +154,10 @@ def installed_context():
 
 
 def verify_release(directory, release, original):
-    """Verify the actor's own rollback snapshots against pre-upgrade private hashes."""
+    """Verify all required pre-upgrade hashes and safe additional text snapshots."""
     script = r'''import hashlib,json,pathlib,stat,subprocess
 root = pathlib.Path(%r)
-if root.is_symlink() or not root.is_dir() or root.stat().st_mode & 0o077:
+if any(parent.is_symlink() for parent in (root, *root.parents)) or not root.is_dir() or root.stat().st_mode & 0o077:
     raise RuntimeError('Actor release directory must be private and nonsymlink')
 path = root / 'release.json'
 if path.is_symlink() or not path.is_file() or path.stat().st_size > 262144:
@@ -168,26 +168,73 @@ if record.get('image_id') != %r:
 image = json.loads(subprocess.check_output(['sudo','-n','docker','image','inspect',record['image_id']],text=True))
 if len(image) != 1 or image[0]['Id'] != record['image_id']:
     raise RuntimeError('Original runtime image is no longer available')
-expected = %r
-seen = set()
-for entry in record['files']:
-    original_path, saved = entry['path'], pathlib.Path(entry['saved_path'])
-    if original_path in seen or original_path not in expected or saved.is_absolute() or '..' in saved.parts:
-        raise RuntimeError('Unsafe/duplicate release manifest entry')
-    seen.add(original_path)
-    current = root
-    for part in saved.parts:
+required_hashes = %r
+source_root = pathlib.Path(%r)
+if any(parent.is_symlink() for parent in (source_root, *source_root.parents)) or not source_root.is_dir():
+    raise RuntimeError('Original source directory is missing or contains a symlink')
+if not isinstance(record.get('files'), list) or len(record['files']) > 128:
+    raise RuntimeError('Release snapshots exceed finite file-count bound')
+
+def manifest_relative_path(value):
+    if not isinstance(value, str) or not value or '\x00' in value:
+        raise RuntimeError('Unsafe release manifest path')
+    path = pathlib.Path(value)
+    if path.is_absolute() or '..' in path.parts or value != path.as_posix() or path == pathlib.Path('.'):
+        raise RuntimeError('Unsafe release manifest path')
+    return path
+
+def nonsymlink_path(parent, relative):
+    current = parent
+    for part in relative.parts:
         current = current / part
-        if current.is_symlink(): raise RuntimeError('Release snapshot contains a symlink')
-    if not current.is_file() or current.stat().st_size > 262144:
-        raise RuntimeError('Missing or oversized original source/config snapshot')
-    digest = hashlib.sha256(current.read_bytes()).hexdigest()
-    if digest != expected[original_path] or entry['sha256'] != digest:
+        if current.is_symlink():
+            raise RuntimeError('Release snapshot path contains a symlink')
+    return current
+
+def read_bounded_text(path):
+    if not stat.S_ISREG(path.stat().st_mode) or path.stat().st_size > 262144:
+        raise RuntimeError('Missing, nonregular, or oversized source/config snapshot')
+    body = path.read_bytes()
+    body.decode('utf-8')
+    if b'\x00' in body:
+        raise RuntimeError('Source/config snapshot is not text')
+    return body
+
+original_paths, saved_paths = set(), set()
+total_bytes, extra_current_originals_matched = 0, 0
+for entry in record['files']:
+    original_path = manifest_relative_path(entry['path']).as_posix()
+    saved_path = manifest_relative_path(entry['saved_path'])
+    if original_path in original_paths or saved_path in saved_paths:
+        raise RuntimeError('Duplicate release manifest original or saved path')
+    original_paths.add(original_path)
+    saved_paths.add(saved_path)
+    body = read_bounded_text(nonsymlink_path(root, saved_path))
+    total_bytes += len(body)
+    if total_bytes > 4194304:
+        raise RuntimeError('Release snapshots exceed finite total-byte bound')
+    digest = hashlib.sha256(body).hexdigest()
+    if entry['sha256'] != digest or (original_path in required_hashes and digest != required_hashes[original_path]):
         raise RuntimeError('Actor rollback snapshot differs from pre-upgrade source/config')
-if seen != set(expected):
+    # Extras have no independent pre-upgrade hash. Check their current originals
+    # when still present, and report that weaker evidence separately.
+    if original_path not in required_hashes:
+        current_original = nonsymlink_path(source_root, pathlib.Path(original_path))
+        if current_original.exists():
+            if hashlib.sha256(read_bounded_text(current_original)).hexdigest() != digest:
+                raise RuntimeError('Extra rollback snapshot differs from its current original')
+            extra_current_originals_matched += 1
+if not set(required_hashes).issubset(original_paths):
     raise RuntimeError('Actor rollback snapshots omit pre-upgrade source/config')
-print(json.dumps({'image_id':record['image_id'],'preserved_files':len(seen),'verified':True}))
-''' % (release, original["image_id"], {item["path"]: item["sha256"] for item in original["files"]})
+print(json.dumps({
+    'image_id': record['image_id'],
+    'preserved_files': len(original_paths),
+    'required_files': len(required_hashes),
+    'extra_files': len(original_paths) - len(required_hashes),
+    'extra_current_originals_matched': extra_current_originals_matched,
+    'verified': True,
+}))
+''' % (release, original["image_id"], {item["path"]: item["sha256"] for item in original["files"]}, original["root"])
     return demo.operator(directory, "preserved-release", script)
 
 
