@@ -31,6 +31,10 @@ decoders allow up to 6,422,528 encoded bytes, covering six-byte JSON escaping
 plus 128 KiB of metadata. RPC response decoders retain a separate 2 MiB cap.
 Responses project job metadata without the source; durable records retain the
 complete command for execution and idempotency, including after restart.
+The MCP-only `wait_ms` option is handled by the gateway using short read-only
+RPCs. It is not a native runner request field: strict native decoders reject it,
+so a wait cannot silently become an unbounded target operation. No SSH slot or
+engine lock remains held between the gateway's status reads.
 
 Lab readiness uses an internal `health` action through this same private RPC.
 It requires the same nonempty owner fields, returns an empty successful response
@@ -86,6 +90,16 @@ The daemon persists `accepted` before dispatch. A job then becomes `running`,
 or `lost`. No startup recovery path resubmits an accepted or running command.
 Exit codes are present when Bash reports one reliably. Reasons distinguish
 command timeout, output quota, shell failure, daemon recovery, and disconnection.
+`shell_completion_missing` means Bash exited or the completion pipe closed
+before a valid command result. It covers explicit `exit` (even `exit 0`), an
+errexit failure, or closing FD 3 while the shell is alive. EOF and process exit
+can arrive in either order, so the reason does not claim which caused the loss.
+The exit code remains absent and the connection is lost. Malformed or oversized
+records and completion read failures are separately `shell_control_corrupted`;
+an empty record is malformed, whereas EOF is not a record. Neither outcome
+permits replay. Inspect captured output and external effects before further
+action, then open a new connection. The MCP response includes this recovery
+guidance.
 
 ## Output and supervision
 

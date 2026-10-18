@@ -60,13 +60,20 @@ type execution struct {
 	cancel context.CancelCauseFunc
 }
 
+// Each event carries a record or read error. Clean EOF closes the channel without
+// an error event, keeping it distinct from malformed or oversized data.
+type shellCompletion struct {
+	line string
+	err  error
+}
+
 type shellWorker struct {
 	mu          sync.Mutex
 	root        string
 	shellInput  io.WriteCloser
 	process     *os.Process
 	shellExited chan struct{}
-	completion  chan string
+	completion  chan shellCompletion
 	current     *execution
 	grace       time.Duration
 	outputLimit int64
@@ -113,7 +120,7 @@ func RunWorker(ctx context.Context, root, socket, home string, grace time.Durati
 		shellInput:  stdin,
 		process:     cmd.Process,
 		shellExited: make(chan struct{}),
-		completion:  make(chan string, 1),
+		completion:  make(chan shellCompletion, 1),
 		grace:       grace,
 		outputLimit: outputLimit,
 	}
@@ -124,9 +131,16 @@ func RunWorker(ctx context.Context, root, socket, home string, grace time.Durati
 		scanner := bufio.NewScanner(controlRead)
 		for scanner.Scan() {
 			select {
-			case w.completion <- scanner.Text():
+			case w.completion <- shellCompletion{line: scanner.Text()}:
 			case <-w.shellExited:
 				return
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			// A bounded-record failure is not EOF, even if Bash and FD 3 remain open.
+			select {
+			case w.completion <- shellCompletion{err: err}:
+			case <-w.shellExited:
 			}
 		}
 	}()
@@ -293,12 +307,24 @@ func (w *shellWorker) run(request workerRequest) workerResult {
 	case <-ctx.Done():
 		return w.interrupt(context.Cause(ctx).Error())
 	case <-w.shellExited:
-		return workerResult{State: Lost, Reason: "shell_exited", Lost: true}
+		return workerResult{State: Lost, Reason: "shell_completion_missing", Lost: true}
 	}
 	result := workerResult{}
 	select {
-	case line := <-w.completion:
-		fields := strings.Fields(line)
+	case completion, open := <-w.completion:
+		if !open {
+			// EOF can precede process.Wait when Bash exits, or the command can
+			// close FD 3 while Bash stays alive. Neither supplies a command result.
+			w.kill()
+			result = workerResult{State: Lost, Reason: "shell_completion_missing", Lost: true}
+			break
+		}
+		if completion.err != nil {
+			w.kill()
+			result = workerResult{State: Lost, Reason: "shell_control_corrupted", Lost: true}
+			break
+		}
+		fields := strings.Fields(completion.line)
 		if len(fields) != 2 || fields[0] != token {
 			w.kill()
 			result = workerResult{State: Lost, Reason: "shell_control_corrupted", Lost: true}
@@ -315,7 +341,7 @@ func (w *shellWorker) run(request workerRequest) workerResult {
 			result.State = Failed
 		}
 	case <-w.shellExited:
-		result = workerResult{State: Lost, Reason: "shell_exited", Lost: true}
+		result = workerResult{State: Lost, Reason: "shell_completion_missing", Lost: true}
 	case <-ctx.Done():
 		result = w.interrupt(context.Cause(ctx).Error())
 	}

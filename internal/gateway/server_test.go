@@ -33,6 +33,8 @@ func TestRunInput(t *testing.T) {
 		{Action: "status", ConnectionID: id},
 		{Action: "lookup", IdempotencyKey: "once"},
 		{Action: "cancel", JobID: id},
+		{Action: "execute", ConnectionID: id, IdempotencyKey: "wait", Command: "true", WaitMillis: 10000, Limit: 3},
+		{Action: "status", JobID: id, WaitMillis: 10000, StdoutCursor: 4, Limit: 1},
 	}
 	for _, in := range valid {
 		if _, err := in.request(); err != nil {
@@ -52,6 +54,14 @@ func TestRunInput(t *testing.T) {
 		{Action: "lookup", IdempotencyKey: "k", JobID: id},
 		{Action: "cancel", JobID: "bad"},
 		{Action: "run", ConnectionID: id, IdempotencyKey: "k", Command: "true"},
+		{Action: "execute", ConnectionID: id, IdempotencyKey: "k", Command: "true", WaitMillis: -1},
+		{Action: "execute", ConnectionID: id, IdempotencyKey: "k", Command: "true", WaitMillis: 10001},
+		{Action: "execute", ConnectionID: id, IdempotencyKey: "k", Command: "true", Limit: 3},
+		{Action: "status", JobID: id, WaitMillis: -1},
+		{Action: "status", JobID: id, WaitMillis: 10001},
+		{Action: "status", ConnectionID: id, WaitMillis: 1},
+		{Action: "lookup", IdempotencyKey: "k", WaitMillis: 1},
+		{Action: "cancel", JobID: id, WaitMillis: 1},
 	}
 	for _, in := range invalid {
 		if _, err := in.request(); err == nil {
@@ -109,6 +119,16 @@ func TestPublicOutputIsBoundedAndLossless(t *testing.T) {
 	}
 	if publicStream([]byte{0xe2, 0x82}, 2, true, false)["encoding"] != "base64" {
 		t.Fatal("partial UTF-8 must preserve bytes")
+	}
+	for _, reason := range []string{"shell_completion_missing", "shell_control_corrupted"} {
+		job := publicResponse(runner.Response{Job: &runner.Job{State: runner.Lost, Reason: reason, ShellStateLost: true}})["job"].(map[string]any)
+		diagnostic, _ := job["diagnostic"].(string)
+		if job["exit_code"] != (*int)(nil) || !strings.Contains(diagnostic, "never replay") || !strings.Contains(diagnostic, "new connection") {
+			t.Fatalf("lost completion is not actionable or invented an exit code: %+v", job)
+		}
+		if reason == "shell_control_corrupted" && (!strings.Contains(diagnostic, "oversized") || !strings.Contains(diagnostic, "read reliably") || strings.Contains(diagnostic, "Bash exited")) {
+			t.Fatalf("control read failure was misdiagnosed as shell exit or EOF: %q", diagnostic)
+		}
 	}
 }
 

@@ -44,9 +44,10 @@ type RunInput struct {
 	Command        string   `json:"command,omitempty" jsonschema:"Bash source for execute. Supply command or commands, never both."`
 	Commands       []string `json:"commands,omitempty" jsonschema:"Serial newline-separated Bash batch in one job and persistent shell. Final command determines exit status."`
 	TimeoutMillis  int64    `json:"timeout_ms,omitzero" jsonschema:"Execution deadline in milliseconds, 1 through 3600000. Default 3600000."`
+	WaitMillis     int64    `json:"wait_ms,omitzero" jsonschema:"Optional wait for execute completion or new job-status output, 0 through 10000 milliseconds. Default zero returns immediately; never resubmit to wait."`
 	StdoutCursor   int64    `json:"stdout_cursor,omitzero" jsonschema:"Byte cursor from the previous status response; default zero."`
 	StderrCursor   int64    `json:"stderr_cursor,omitzero" jsonschema:"Byte cursor from the previous status response; default zero."`
-	Limit          int      `json:"limit,omitzero" jsonschema:"Maximum output bytes per stream for status, 1 through 16384; default 8192."`
+	Limit          int      `json:"limit,omitzero" jsonschema:"Maximum output bytes per stream for status or execute with wait_ms, 1 through 16384; default 8192."`
 }
 
 type server struct{ rpc RPC }
@@ -67,14 +68,14 @@ func NewHandler(config Config, rpc RPC, verifier auth.TokenVerifier) (http.Handl
 		return nil, errors.New("issuer must be the private loopback sshmcp realm")
 	}
 	s := &server{rpc: rpc}
-	m := mcp.NewServer(&mcp.Implementation{Name: "sshmcp", Version: "0.5.0"}, &mcp.ServerOptions{Instructions: "Use connect(lab-target) for an independent persistent Bash shell. Save each execute idempotency_key before submission. Poll status with job_id and byte cursors; never wait by resubmitting a command. On uncertain acknowledgement, use lookup with the SAME key. SSH/gateway loss does not cancel jobs. Disconnect closes the managed shell. Shell and retained job results expire; lost jobs are never replayed. This is a private administrative lab."})
+	m := mcp.NewServer(&mcp.Implementation{Name: "sshmcp", Version: "0.5.0"}, &mcp.ServerOptions{Instructions: "Use connect(lab-target) for an independent persistent Bash shell. Save each execute idempotency_key before submission. Optional wait_ms up to 10000 returns completion/output in execute or waits for new job-status output. Poll status with job_id and byte cursors; never wait by resubmitting a command. On uncertain acknowledgement, use lookup with the SAME key. SSH/gateway loss does not cancel jobs. Disconnect closes the managed shell. Shell and retained job results expire; lost jobs are never replayed. This is a private administrative lab."})
 	mcp.AddTool(m, &mcp.Tool{
 		Name:        "connect",
 		Description: "Open an independent persistent Bash shell on configured lab-target. Returns an application connection_id; HTTP transport sessions do not own it.",
 	}, s.connect)
 	mcp.AddTool(m, &mcp.Tool{
 		Name:        "run_command",
-		Description: "Execute Bash source or a serial batch asynchronously, inspect incremental output/status, lookup an idempotency key, or cancel a job. Exactly one active job per connection; sixteen across the target. Accepted execution is durable and is never automatically replayed.",
+		Description: "Execute Bash source or a serial batch asynchronously, optionally wait up to 10000 ms for completion/output, inspect incremental output/status, lookup an idempotency key, or cancel a job. Exactly one active job per connection; sixteen across the target. Accepted execution is durable and is never automatically replayed.",
 	}, s.run)
 	mcp.AddTool(m, &mcp.Tool{
 		Name:        "disconnect",
@@ -132,7 +133,7 @@ func toolError(code, message string) (*mcp.CallToolResult, any, error) {
 	}, nil, nil
 }
 
-func (s *server) invoke(ctx context.Context, req *mcp.CallToolRequest, request runner.Request) (*mcp.CallToolResult, any, error) {
+func (s *server) invoke(ctx context.Context, req *mcp.CallToolRequest, request runner.Request, waitMillis int64) (*mcp.CallToolResult, any, error) {
 	if req.Extra == nil {
 		return toolError("unauthenticated", "verified identity unavailable")
 	}
@@ -154,7 +155,19 @@ func (s *server) invoke(ctx context.Context, req *mcp.CallToolRequest, request r
 	if response.Error != "" {
 		return toolError(response.Code, response.Error)
 	}
+	var waitErr error
+	if waitMillis > 0 {
+		response, waitErr = s.wait(rpcCtx, request, response, time.Duration(waitMillis)*time.Millisecond)
+	}
 	result := publicResponse(response)
+	if waitErr != nil {
+		// Execution was already acknowledged. Preserve its ID and last known
+		// result if the optional read fails; never turn it into a new submission.
+		result["wait_error"] = map[string]any{
+			"code":  "status_unavailable",
+			"error": "The job was acknowledged, but the optional status wait was interrupted. Inspect this job_id with status; do not resubmit the command.",
+		}
+	}
 	encoded, _ := json.Marshal(result)
 	return &mcp.CallToolResult{
 		Content:           []mcp.Content{&mcp.TextContent{Text: string(encoded)}},
@@ -162,18 +175,77 @@ func (s *server) invoke(ctx context.Context, req *mcp.CallToolRequest, request r
 	}, nil, nil
 }
 
+// wait polls through short read-only RPCs, releasing the SSH data slot after each.
+// Holding a channel for the whole wait would serialize sixteen waited executes
+// behind the six ordinary SSH channels. The original command is dispatched once.
+// Status wakes on new output; execute waits for completion or its time budget.
+func (s *server) wait(ctx context.Context, request runner.Request, response runner.Response, duration time.Duration) (runner.Response, error) {
+	if response.Job == nil {
+		return response, errors.New("acknowledged job unavailable")
+	}
+	if request.Action == "output" && statusReady(response) {
+		return response, nil
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	// Keep the requested cursors fixed: each poll replaces the output snapshot,
+	// so advancing here would silently discard bytes from the eventual response.
+	outputRequest := runner.Request{
+		Action: "output", Owner: request.Owner, JobID: response.Job.ID,
+		StdoutCursor: request.StdoutCursor, StderrCursor: request.StderrCursor, Limit: request.Limit,
+	}
+	if outputRequest.Limit == 0 {
+		outputRequest.Limit = 8192
+	}
+	duplicate := response.Duplicate
+	for {
+		next, err := s.rpc.Call(waitCtx, outputRequest)
+		if err != nil {
+			// Only this wait's own deadline is a quiet timeout. A real read
+			// failure remains visible even if it arrives as the wait expires.
+			if errors.Is(err, context.DeadlineExceeded) && errors.Is(waitCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+				return response, nil
+			}
+			return response, err
+		}
+		if next.Error != "" {
+			return response, errors.New("job status unavailable")
+		}
+		next.Duplicate = duplicate
+		response = next
+		if request.Action == "output" && statusReady(response) || jobFinished(response.Job) {
+			return response, nil
+		}
+		select {
+		case <-waitCtx.Done():
+			// Expiring the optional wait is successful; caller/RPC cancellation
+			// still returns the parent error and retains the acknowledgement.
+			return response, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+func jobFinished(job *runner.Job) bool {
+	return job != nil && job.State != runner.Accepted && job.State != runner.Running
+}
+
+func statusReady(response runner.Response) bool {
+	return jobFinished(response.Job) || response.Output != nil && (len(response.Output.Stdout) > 0 || len(response.Output.Stderr) > 0)
+}
+
 func (s *server) connect(ctx context.Context, req *mcp.CallToolRequest, in ConnectInput) (*mcp.CallToolResult, any, error) {
 	if in.HostAlias != "lab-target" {
 		return toolError("invalid_request", "host_alias must be lab-target; arbitrary hosts are disabled")
 	}
-	return s.invoke(ctx, req, runner.Request{Action: "connect"})
+	return s.invoke(ctx, req, runner.Request{Action: "connect"}, 0)
 }
 
 func (s *server) disconnect(ctx context.Context, req *mcp.CallToolRequest, in DisconnectInput) (*mcp.CallToolResult, any, error) {
 	if !validID(in.ConnectionID) {
 		return toolError("invalid_request", "a valid connection_id is required")
 	}
-	return s.invoke(ctx, req, runner.Request{Action: "disconnect", ConnectionID: in.ConnectionID})
+	return s.invoke(ctx, req, runner.Request{Action: "disconnect", ConnectionID: in.ConnectionID}, 0)
 }
 
 func validID(id string) bool {
@@ -201,6 +273,12 @@ func (in RunInput) request() (runner.Request, error) {
 	if in.StdoutCursor < 0 || in.StderrCursor < 0 || in.Limit < 0 || in.Limit > 16384 {
 		return r, errors.New("cursors must be nonnegative; limit must be 1..16384 (or omitted)")
 	}
+	if in.WaitMillis < 0 || in.WaitMillis > 10000 {
+		return r, errors.New("wait_ms must be 0..10000 (or omitted)")
+	}
+	if in.WaitMillis != 0 && in.Action != "execute" && !(in.Action == "status" && in.JobID != "") {
+		return r, errors.New("wait_ms belongs only to execute or job status")
+	}
 	if in.ConnectionID != "" && !validID(in.ConnectionID) ||
 		in.JobID != "" && !validID(in.JobID) || len(in.IdempotencyKey) > 4096 {
 		return r, errors.New("invalid connection/job ID or idempotency key")
@@ -208,8 +286,11 @@ func (in RunInput) request() (runner.Request, error) {
 	if in.Action != "execute" && (in.Command != "" || len(in.Commands) > 0 || in.TimeoutMillis != 0) {
 		return r, errors.New("command, commands and timeout_ms belong only to execute")
 	}
-	if in.Action != "status" && (in.StdoutCursor != 0 || in.StderrCursor != 0 || in.Limit != 0) {
-		return r, errors.New("output cursors and limit belong only to status")
+	if in.Action != "status" && (in.StdoutCursor != 0 || in.StderrCursor != 0) {
+		return r, errors.New("output cursors belong only to status")
+	}
+	if in.Limit != 0 && in.Action != "status" && !(in.Action == "execute" && in.WaitMillis > 0) {
+		return r, errors.New("limit belongs only to status or execute with wait_ms")
 	}
 	switch in.Action {
 	case "execute":
@@ -269,7 +350,7 @@ func (s *server) run(ctx context.Context, req *mcp.CallToolRequest, in RunInput)
 	if err != nil {
 		return toolError("invalid_request", err.Error())
 	}
-	return s.invoke(ctx, req, request)
+	return s.invoke(ctx, req, request, in.WaitMillis)
 }
 
 // Public responses omit owner claims and original command source. Polling a
@@ -287,7 +368,7 @@ func publicResponse(response runner.Response) map[string]any {
 		}
 	}
 	if j := response.Job; j != nil {
-		out["job"] = map[string]any{
+		job := map[string]any{
 			"job_id":           j.ID,
 			"connection_id":    j.ConnectionID,
 			"state":            j.State,
@@ -298,6 +379,12 @@ func publicResponse(response runner.Response) map[string]any {
 			"started_at":       j.StartedAt,
 			"finished_at":      j.FinishedAt,
 		}
+		if j.Reason == "shell_completion_missing" {
+			job["diagnostic"] = "Bash exited (for example exit or set -e), or its completion descriptor was closed before a reliable command result. The command exit code is unknown. Inspect captured output and external effects; never replay this lost job. Open a new connection for further work."
+		} else if j.Reason == "shell_control_corrupted" {
+			job["diagnostic"] = "Shell completion data was malformed, oversized, or could not be read reliably. The shell state and command result cannot be trusted; the command exit code is unknown. Inspect captured output and external effects; never replay this lost job. Open a new connection for further work."
+		}
+		out["job"] = job
 	}
 	if response.Duplicate {
 		out["duplicate"] = true

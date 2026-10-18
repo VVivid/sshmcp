@@ -240,23 +240,109 @@ class PrivateMCPTest(unittest.TestCase):
             time.sleep(.05)
         self.fail("Missing incremental output")
 
-    def test_03_sixteen_jobs_cancel_deadline(self):
-        connections = [self.connect() for _ in range(17)]
-        def submit(index):
-            return self.submit(connections[index], "printf started; sleep 7; printf parallel")["job"]["job_id"]
-        with ThreadPoolExecutor(max_workers=8) as pool:
-            jobs = list(pool.map(submit, range(16)))
-        self.client.tool("run_command", expected_error="capacity", action="execute", connection_id=connections[16], idempotency_key=uuid.uuid4().hex, command="true")
-        self.client.tool("run_command", expected_error="connection_busy", action="execute", connection_id=connections[1], idempotency_key=uuid.uuid4().hex, command="true")
+    def test_02b_bounded_wait_and_shell_loss_diagnostics(self):
+        connection = self.connect()
+        key = uuid.uuid4().hex
+        command = "waited_seen=${waited_seen-}x; printf quick; printf diagnostic >&2"
+        quick = self.submit(connection, command, key, wait_ms=10000, limit=3)
+        job = quick["job"]["job_id"]
+        self.assertEqual(quick["job"]["state"], "completed")
+        self.assertEqual(stream_bytes(quick["output"]["stdout"]), b"qui")
+        self.assertEqual(quick["output"]["stdout"]["next_cursor"], 3)
+        self.assertFalse(quick["output"]["stdout"]["eof"])
+        duplicate = self.submit(connection, command, key, wait_ms=5000, limit=5)
+        self.assertTrue(duplicate["duplicate"])
+        self.assertEqual(duplicate["job"]["job_id"], job)
+        self.assertEqual(stream_bytes(duplicate["output"]["stdout"]), b"quick")
+        remaining = self.client.tool("run_command", action="status", job_id=job, stdout_cursor=3, stderr_cursor=3, wait_ms=1000)
+        self.assertEqual(stream_bytes(remaining["output"]["stdout"]), b"ck")
+        self.assertEqual(stream_bytes(remaining["output"]["stderr"]), b"gnostic")
+        seen = self.submit(connection, 'printf "%s" "$waited_seen"', wait_ms=10000)
+        self.assertEqual(stream_bytes(seen["output"]["stdout"]), b"x", "changing wait/limit must not repeat execution")
+
+        delayed = self.submit(connection, "sleep .4; printf first; sleep 1; printf second")["job"]["job_id"]
+        first = self.client.tool("run_command", action="status", job_id=delayed, wait_ms=1000, limit=5)
+        self.assertEqual(first["job"]["state"], "running", "status wait should return on output before completion")
+        self.assertEqual(stream_bytes(first["output"]["stdout"]), b"first")
         before = time.monotonic()
-        self.client.tool("run_command", action="cancel", job_id=jobs[0])
-        self.assertLess(time.monotonic() - before, 3)
-        self.assertEqual(self.wait(jobs[0])[0]["state"], "cancelled")
-        for job in jobs[1:]:
-            self.assertEqual(self.wait(job)[0]["state"], "completed")
-        deadline = self.submit(connections[16], "sleep 30", timeout_ms=100)["job"]["job_id"]
-        self.assertEqual(self.wait(deadline)[0]["reason"], "command_timeout")
-        self.evidence.append("16 active jobs; 17th and per-connection overlap denied; independent prompt cancel; execution deadline")
+        quiet = self.client.tool("run_command", action="status", job_id=delayed, stdout_cursor=5, wait_ms=100, limit=5)
+        self.assertLess(time.monotonic() - before, 2, "quiet status wait exceeded its bounded budget")
+        self.assertEqual(quiet["job"]["state"], "running")
+        self.assertEqual(stream_bytes(quiet["output"]["stdout"]), b"")
+        self.other.tool("run_command", expected_error="not_found", action="status", job_id=delayed, wait_ms=1000)
+        self.assertEqual(self.wait(delayed)[1], b"firstsecond")
+        for action, fields in (
+            ("status", {"job_id": delayed, "wait_ms": -1}),
+            ("status", {"job_id": delayed, "wait_ms": 10001}),
+            ("status", {"connection_id": connection, "wait_ms": 1}),
+            ("lookup", {"idempotency_key": key, "wait_ms": 1}),
+            ("cancel", {"job_id": delayed, "wait_ms": 1}),
+        ):
+            self.client.tool("run_command", expected_error="invalid_request", action=action, **fields)
+
+        for source, reason in (
+            ("printf before; set -e; false; printf unreachable", "shell_completion_missing"),
+            ("printf before; exit 0; printf unreachable", "shell_completion_missing"),
+            ("exec 3>&-; sleep 1", "shell_completion_missing"),
+            ("printf 'malformed\\n' >&3; sleep 1", "shell_control_corrupted"),
+        ):
+            with self.subTest(shell_loss=source):
+                lost_connection = self.connect()
+                lost_key = uuid.uuid4().hex
+                lost = self.submit(lost_connection, source, lost_key, wait_ms=10000)
+                state = lost["job"]
+                self.assertEqual((state["state"], state["reason"]), ("lost", reason))
+                self.assertTrue(state["shell_state_lost"])
+                self.assertIsNone(state["exit_code"], "shell exit must not invent a command result")
+                self.assertIn("never replay", state["diagnostic"])
+                self.assertIn("new connection", state["diagnostic"])
+                duplicate = self.submit(lost_connection, source, lost_key, wait_ms=1000, limit=3)
+                self.assertTrue(duplicate["duplicate"])
+                self.assertEqual(duplicate["job"]["job_id"], state["job_id"])
+                self.submit_lost_shell(lost_connection)
+        self.evidence.append("waited quick execute returns bounded output/completion; wait/limit changes preserve idempotency; byte-cursor resume; status wait wakes on output and times out quietly; owner and wait bounds enforced; errexit/exit/FD closure distinct from malformed completion with actionable no-replay diagnostics")
+
+    def submit_lost_shell(self, connection):
+        self.client.tool("run_command", expected_error="shell_lost", action="execute", connection_id=connection, idempotency_key=uuid.uuid4().hex, command="true")
+
+    def test_03_sixteen_jobs_cancel_deadline(self):
+        connections = []
+        executions = [{"index": index, "idempotency_key": uuid.uuid4().hex} for index in range(16)]
+        def submit(index):
+            record = executions[index]
+            record["connection_id"] = connections[index]
+            result = self.submit(connections[index], "printf started; sleep 7; printf parallel", record["idempotency_key"], wait_ms=1000)
+            record["response"] = result
+            self.assertIn(result["job"]["state"], ("accepted", "running"))
+            self.assertNotIn("wait_error", result)
+            return result["job"]["job_id"]
+        cleanup_start = len(self.cleanup_errors)
+        try:
+            for _ in range(17):
+                connections.append(self.connect())
+            with ThreadPoolExecutor(max_workers=16) as pool:
+                jobs = list(pool.map(submit, range(16)))
+            self.client.tool("run_command", expected_error="capacity", action="execute", connection_id=connections[16], idempotency_key=uuid.uuid4().hex, command="true")
+            self.client.tool("run_command", expected_error="connection_busy", action="execute", connection_id=connections[1], idempotency_key=uuid.uuid4().hex, command="true")
+            before = time.monotonic()
+            self.client.tool("run_command", action="cancel", job_id=jobs[0])
+            self.assertLess(time.monotonic() - before, 3)
+            self.assertEqual(self.wait(jobs[0])[0]["state"], "cancelled")
+            for job in jobs[1:]:
+                self.assertEqual(self.wait(job)[0]["state"], "completed")
+            deadline = self.submit(connections[16], "sleep 30", timeout_ms=100)["job"]["job_id"]
+            self.assertEqual(self.wait(deadline)[0]["reason"], "command_timeout")
+            self.evidence.append("16 overlapping execute calls with wait_ms through six ordinary SSH channels; 17th and per-connection overlap denied; independent prompt cancel; execution deadline")
+        finally:
+            primary_error = lab.error_text(sys.exc_info()[1]) if sys.exc_info()[1] is not None else None
+            # Drain every shell even if a worker assertion fails after accepting
+            # its job, so the next case cannot inherit this case's capacity use.
+            for connection in connections:
+                lab.cleanup_step(lambda: self.client.tool("disconnect", connection_id=connection), self.cleanup_errors)
+            lab.cleanup_step(lambda: lab.write_private(self.directory / "sixteen-waited-executions.json", json.dumps({
+                "executions": executions, "primary_error": primary_error,
+                "cleanup_errors": self.cleanup_errors[cleanup_start:],
+            }, indent=2) + "\n"), self.cleanup_errors)
 
     def test_04_gateway_restart_ssh_loss_and_target_reboot(self):
         connection = self.connect()

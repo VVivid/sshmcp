@@ -134,10 +134,30 @@ have a separate 2 MiB cap and omit command source; the durable job retains the
 full source for execution and exact idempotency comparisons.
 
 Execute returns the durable job acknowledgement promptly. It does not hold SSH
-open for the command's lifetime or automatically poll until completion. Save the
-returned `job.job_id`. Poll status with that ID; the first response may report
-`accepted` or `running` even for a quick command. One active job is allowed per
-connection and 16 across the target; use independent connections for parallelism.
+open for the command's lifetime. Save the returned `job.job_id`. Without an
+explicit wait, the first response may report `accepted` or `running` even for a
+quick command. One active job is allowed per connection and 16 across the
+target; use independent connections for parallelism.
+
+Optional `wait_ms` is 0–10,000 milliseconds, default zero, for execute and job
+status only. Execute waits for a terminal result or that bound and includes any
+retrieved bounded output snapshot from byte zero; a quick command can return its completed
+result and output in one tool call. Execute with a wait may also specify `limit`
+(default 8,192, maximum 16,384 bytes per stream). Save the returned cursors to
+continue with status. A status wait returns as soon as output is available after
+the supplied cursors, the job is terminal, or the bound expires. A quiet timeout
+returns the latest known state and bounded output; it does not cancel the job.
+If the bound expires before the first status read completes, execute can return
+only its durable acknowledgement; retrieve output with the returned job ID.
+Connection status, lookup, and cancel do not accept a wait.
+
+Waiting happens in the gateway through short read-only RPCs, releasing SSH slots
+between reads. Six ordinary SSH channels can therefore serve sixteen concurrent
+waited executions. Commands are submitted once; waiting never resends source.
+The wait observes caller cancellation and the existing 30-second RPC budget.
+After a confirmed execution acknowledgement, a failed optional status read keeps
+the known job ID/state and adds `wait_error.code="status_unavailable"`. Inspect
+that job with status; do not resubmit it to obtain output.
 
 `status` accepts either `job_id` (state plus incremental stdout/stderr) or
 `connection_id` (shell state and active job ID), never both. Job output accepts
@@ -163,12 +183,22 @@ large scripts are not echoed on every poll. Tool errors carry a stable `code`
 and actionable text: examples include `connection_busy`, `capacity`,
 `idempotency_conflict`, `shell_lost`, and `acknowledgement_uncertain`.
 
+`reason="shell_completion_missing"` means Bash exited, including an explicit
+`exit` or `set -e` failure, or its completion descriptor closed before a reliable
+command result. Such a job is `lost` with no command exit code, including for
+`exit 0`. Malformed or oversized completion data and control read failures
+report `shell_control_corrupted`. Both include a `job.diagnostic` explaining recovery:
+inspect output and external effects, open a new connection, and never replay the
+lost job. The runner does not disable native Bash options to preserve its shell.
+
 ## Idempotency and uncertain acknowledgements
 
 Save an idempotency key **before** submitting execute. Reusing the same key with
 the same connection, exact source, and effective timeout returns the same job and
 `duplicate=true`. Changing any of those fields returns `idempotency_conflict`.
-Keys are scoped to the verified owner across connections, not an HTTP session.
+Wait duration and output limit are retrieval options, outside execution identity;
+changing them can retrieve the same job without executing again. Keys are scoped
+to the verified owner across connections, not an HTTP session.
 
 If SSH/HTTP drops during execute, the target may already have persisted it. The
 gateway never retries a dispatched RPC. Use `lookup` with the **same key** after
@@ -187,9 +217,16 @@ capture quota and 256 retained records. See [RUNNER.md](RUNNER.md).
 
 The gateway keeps one six-channel ordinary SSH transport and a separate
 two-channel control transport, each below OpenSSH's default ten-session limit.
-Channels carry only short runner RPCs. HTTP requests, bodies, headers, output,
-concurrency, SSH handshakes, and RPC durations are bounded. An RPC deadline drops
-its affected SSH transport, making uncertain in-flight acknowledgements explicit.
+Channels carry only short runner RPCs, including during optional waits. HTTP
+requests, bodies, headers, output, concurrency, SSH handshakes, and RPC durations
+are bounded. A caller deadline returns promptly and closes only its channel once
+established. A pending channel open keeps its bounded SSH slot until cleanup;
+it does not dispatch after cancellation. An independent 30-second watchdog starts
+after SSH connection acquisition and retires the transport if channel opening,
+RPC execution, or cleanup stalls. That can interrupt sibling calls on the same
+transport; an ordinary-transport failure does not close the control transport.
+Dispatched RPCs are never automatically replayed, including when their
+acknowledgements become uncertain.
 
 ## Validation boundaries
 
@@ -206,6 +243,9 @@ HTTP gateway, native SSH, and the target runner. It checks resource rejection,
 scope/ownership, tool count, shell state/isolation, serial batches, incremental
 text/binary output, idempotency/conflicts, 16 jobs, cancel/deadline, gateway
 restart, scoped SSH loss, target reboot, no replay, and short abandonment timers.
+It also checks waited quick-command output, bounded quiet status waits, cursor
+continuation, sixteen overlapping waited executions, and realistic shell-loss
+versus malformed-control diagnostics.
 Its final cleanup restores the ordinary runner unit, removes only its marker,
 disconnects its shells, collects private diagnostics, and stops both VMs.
 It never restores a baseline or installs an application/Docker on the target.

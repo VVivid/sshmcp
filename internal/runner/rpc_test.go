@@ -12,6 +12,15 @@ import (
 	"time"
 )
 
+func TestNativeRPCRejectsMCPOnlyWaitOption(t *testing.T) {
+	for _, value := range []string{"-1", "0", "10000", "10001"} {
+		var request Request
+		if err := decode(json.RawMessage(`{"action":"output","wait_ms":`+value+`}`), &request); err == nil {
+			t.Fatalf("native RPC silently accepted MCP-only wait_ms=%s", value)
+		}
+	}
+}
+
 func TestLargeCommandRPCBoundsAndDurability(t *testing.T) {
 	const escapedTail = "\nprintf escaped"
 	for _, tc := range []struct {
