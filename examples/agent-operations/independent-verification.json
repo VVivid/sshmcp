@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "accepted_operations_run_id": "34852ddc73504e6bb2e19a3957b01690",
+  "private_evidence_directory": ".lab/results/20261018T232001Z-cp10-independent-tester-89558f49281441ceaa27eaa909cf7ffb",
+  "accepted_raw_evidence_audit": {
+    "fresh_isolated_sessions": 3,
+    "exact_tools": [
+      "connect",
+      "disconnect",
+      "run_command"
+    ],
+    "actor_counts_match_public_report": true,
+    "real_gateway_outage_seconds": 4.249797,
+    "original_failed_acknowledgement_retained": true,
+    "original_job_lookup_and_terminal_completion": true,
+    "complete_stdout_stderr_cursor_coverage": true,
+    "activation_replayed": false,
+    "activation_receipt_lines": 1,
+    "rollback_exact_original_image_and_source_hashes": true,
+    "fresh_and_historical_telemetry_each_phase": true,
+    "earlier_failed_attempts_remain_failed": true
+  },
+  "source_provenance": {
+    "files_verified": 22,
+    "primary": 20,
+    "supplemental_actual_mcp": 2,
+    "published_bytes_match_private_originals": true,
+    "known_runtime_credentials_absent": true,
+    "private_env_excluded": true,
+    "prior_public_snapshot_unchanged_files": 25
+  },
+  "lifecycle": {
+    "down_seconds": 8.576683250023052,
+    "both_verified_stopped": true,
+    "up_seconds": 84.13373416708782,
+    "both_final_running": true,
+    "same_container_ids_all_services": true,
+    "same_runtime_images": true,
+    "same_source_config_hashes_including_private_env": true,
+    "same_named_volumes": true,
+    "exact_final_version_marker": true,
+    "fresh_telemetry": {
+      "trace_id": "1efca7e887244a578a5ab9b41d5c09c3",
+      "connected_proxy_app_spans": true,
+      "correlated_app_logs": true,
+      "proxy_json_log": true,
+      "both_counters_increased": true,
+      "dashboard_queries_pass": true
+    },
+    "historical_trace_and_logs_retained": true
+  },
+  "warmed_benchmark": {
+    "connections": 16,
+    "warm_jobs": 16,
+    "sleep_2_jobs": 16,
+    "guest_intervals_all_overlap": true,
+    "dispatch_to_final_output_drain_seconds": 3.3699719170108438,
+    "required_max_seconds": 8,
+    "warm_command_median_seconds": 1.9546950832009315,
+    "warm_command_max_seconds": 2.120041999965906,
+    "warm_median_definition": "ninth sorted value of 16, as emitted by benchmark helper",
+    "tool_calls": 119,
+    "tool_call_breakdown": {
+      "connect": 16,
+      "execute": 32,
+      "status": 55,
+      "disconnect": 16
+    },
+    "transport_errors": 0,
+    "tool_errors": 0,
+    "closed_connections_verified": 16,
+    "cleanup_errors": [],
+    "automatic_retries": 0,
+    "human_interventions": 0,
+    "warm_timing_context": "16-way concurrent warm-up completion times, not serial steady-state command latency"
+  },
+  "preservation": {
+    "protected_credentials_keys_pins_accounts_and_installed_config_unchanged_during_tester": true,
+    "logical_owner_and_baselines_unchanged": true,
+    "private_host_and_vm_loopback_ports": true,
+    "vm_host_mounts": {},
+    "actual_lgtm_image_linux_arm64_and_expected_pin": true,
+    "private_evidence_directories_0700_files_0600": true,
+    "left_running": true
+  },
+  "limits": [
+    "One local private two-VM stop/resume and one warmed benchmark; no inference for other hosts, public HTTPS, production readiness, high availability, or broad load.",
+    "Raw status request latency includes intentional wait_ms up to 1000 and is not compared with earlier nonblocking request p95.",
+    "Installed configuration fingerprints describe defaults and preservation, not actor runtime model or quota attestation.",
+    "Two local audit orchestration exceptions were corrected before runtime checks: saved audit metadata is a superset, and observer responses use a JSON-RPC envelope. No application defect or actor rerun resulted.",
+    "Concurrent warm-up timings do not establish speedup over an older benchmark."
+  ]
+}

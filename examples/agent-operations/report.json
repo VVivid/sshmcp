@@ -1,0 +1,614 @@
+{
+  "schema_version": 1,
+  "operation": "upgrade-exact-rollback-interrupted-upgrade",
+  "run_id": "34852ddc73504e6bb2e19a3957b01690",
+  "success": true,
+  "accepted_at_utc": "2026-10-18",
+  "duration_seconds": 481.369762,
+  "private_evidence_directory": ".lab/results/20261018T225859Z-demo-operations-test-34852ddc73504e6bb2e19a3957b01690",
+  "command": "make agent-demo-operations-test",
+  "actor_timeout_seconds": 1800,
+  "only_model_visible_tools": [
+    "connect",
+    "disconnect",
+    "run_command"
+  ],
+  "actor_isolation": {
+    "fresh_sessions": 3,
+    "empty_workspaces_outside_checkout": true,
+    "application_source_or_recipes_supplied": false,
+    "host_capabilities_disabled": true,
+    "installed_cli_auth_required_mcp_and_catalog_preflight": true
+  },
+  "settings_observed": {
+    "model_selection": "installed default",
+    "quota": "unknown",
+    "config_sha256": "dcf4b4447b157a0acf8bd2bf4dab5cc7064ba35aec895888cddf53b59d0af6b9",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "low"
+  },
+  "installed_config_unchanged": true,
+  "settings_limit": "This records before/after installed configuration and invocation defaults. It is not runtime model-metadata attestation. No model/account/config changes were made by this Builder or harness; available account quota and internal CLI retries are not established.",
+  "human_interventions": 0,
+  "actors": [
+    {
+      "thread_id": "01a1513d-c006-7091-bfc4-d16699811137",
+      "duration_seconds": 205.5669328328222,
+      "tool_calls": 29,
+      "submissions": 11,
+      "completed_jobs": 7,
+      "failed_jobs": 4,
+      "tool_errors": 0,
+      "runtime_errors": 0,
+      "duplicate_results": 0,
+      "repeated_execute_keys": 0,
+      "repeated_source_submissions": 0,
+      "closed_disconnects": 1,
+      "lost_disconnects": 0,
+      "human_interventions": 0,
+      "timeout_seconds": 1800,
+      "exit_code": 0,
+      "output_complete": true,
+      "output_truncated": false,
+      "phase": "upgrade",
+      "final_feedback": "Upgraded the existing app in `/home/mcp-test/sshmcp-demo`.\n\n- `/version` returns HTTP 200 with exactly the requested bytes, without a newline.\n- `/` and full traces, logs, counters, and dashboard checks pass.\n- Traefik, LGTM, named volumes, configuration, and historical data remain preserved.\n- All 24 original text files, the original runtime image, rollback instructions, and private `release.json` are saved in `/home/mcp-test/.sshmcp-operations-34852ddc73504e6bb2e19a3957b01690`.\n\nAll containers are healthy. MCP connection closed.",
+      "private_transcript_sha256": "744d568ea67cfbf56c11adcf31505f23ac30677bb3115615f2d51f5b1a249ec8",
+      "per_call_latency": "not exposed by installed CLI JSONL",
+      "cli_internal_transport_retries": "not exposed"
+    },
+    {
+      "thread_id": "01a15141-1bd6-7f91-b5a9-f096c3b74ced",
+      "duration_seconds": 62.87564654182643,
+      "tool_calls": 12,
+      "submissions": 6,
+      "completed_jobs": 5,
+      "failed_jobs": 1,
+      "tool_errors": 0,
+      "runtime_errors": 0,
+      "duplicate_results": 0,
+      "repeated_execute_keys": 0,
+      "repeated_source_submissions": 0,
+      "closed_disconnects": 1,
+      "lost_disconnects": 0,
+      "human_interventions": 0,
+      "timeout_seconds": 1800,
+      "exit_code": 0,
+      "output_complete": true,
+      "output_truncated": false,
+      "phase": "rollback",
+      "final_feedback": "Rollback completed and verified.\n\n- Restored the exact requested image ID without rebuilding.\n- Prior source/configuration matches the preserved release; no upgrade-only files remain.\n- `/` and `/version` return HTTP 200 with exactly `Hello, world!\\n`.\n- Traces, correlated logs, request counters, dashboard, and historical data checks passed.\n- Traefik, LGTM, and all named volumes remain unchanged.\n\nSnapshots and receipts are in the supplied private release directory. All MCP connections are closed.",
+      "private_transcript_sha256": "22511b708565533ab3347bbe9c3b7e1bf2229293731545682e4f8b373e193113",
+      "per_call_latency": "not exposed by installed CLI JSONL",
+      "cli_internal_transport_retries": "not exposed"
+    },
+    {
+      "thread_id": "01a15142-4b87-7a60-a4c1-8bd362f22cef",
+      "duration_seconds": 146.4502281669993,
+      "tool_calls": 25,
+      "submissions": 9,
+      "completed_jobs": 7,
+      "failed_jobs": 1,
+      "tool_errors": 3,
+      "runtime_errors": 0,
+      "duplicate_results": 0,
+      "repeated_execute_keys": 0,
+      "repeated_source_submissions": 1,
+      "closed_disconnects": 1,
+      "lost_disconnects": 0,
+      "human_interventions": 0,
+      "timeout_seconds": 1800,
+      "exit_code": 0,
+      "output_complete": true,
+      "output_truncated": false,
+      "phase": "interrupted",
+      "final_feedback": "Implemented and activated the change from the existing deployment.\n\n- `/version` returns HTTP 200 with exactly the requested bytes, without a newline.\n- `/` still returns `Hello, world!`.\n- Traces, correlated logs, counters, dashboard, and historical data verified.\n- Traefik, LGTM, named volumes, and configuration preserved.\n- Receipt is 0600 with exactly one barrier line.\n\nThe gateway transport error was reconciled by lookup and status on the original activation job. No activation retries occurred. The historical check passed after correcting its time window. Connection closed.",
+      "private_transcript_sha256": "215461368c98db309d966ad0fcb90f693c52282f6e67bdf6ee41b8065c0e43ed",
+      "per_call_latency": "not exposed by installed CLI JSONL",
+      "cli_internal_transport_retries": "not exposed"
+    }
+  ],
+  "independent_harness_evaluation": {
+    "baseline": {
+      "probe": {
+        "trace_id": "b49b4fc2712340d4b3a93df5f94c96f6",
+        "marker": "sshmcp-3362bcbe1f594b46aa291f1083977ba9",
+        "started_ns": 1792364354819069000,
+        "count": 12
+      },
+      "ancestry": {
+        "app_span_id": "de43cf15a46017a0",
+        "proxy_ancestor_id": "edb694a162a9e7cb",
+        "trace_id": "b49b4fc2712340d4b3a93df5f94c96f6"
+      },
+      "app_log_count": 12,
+      "proxy_json_log": true,
+      "counters": {
+        "hello-go": {
+          "name": "hello_requests_total",
+          "selector": "hello_requests_total{__type__=\"counter\",job=\"hello-go\",service_name=\"hello-go\"}",
+          "before": 22.0,
+          "type_evidence": "prometheus-otlp-type-label",
+          "after": 34.0
+        },
+        "traefik": {
+          "name": "traefik_entrypoint_requests_total",
+          "selector": "traefik_entrypoint_requests_total{__type__=\"counter\",job=\"traefik\",service_name=\"traefik\"}",
+          "before": 24.0,
+          "type_evidence": "prometheus-otlp-type-label",
+          "after": 36.0
+        }
+      },
+      "counters_increased": true,
+      "dashboard": {
+        "requests": true,
+        "latency": true,
+        "app_logs": true,
+        "proxy_logs": true,
+        "trace_navigation": true
+      }
+    },
+    "upgrade": {
+      "app_image_id": "sha256:ee090a336f1073511c4b4fd8bf3a57b644fd9f2d5ed4ed192d25ec1c222e9a78",
+      "http": {
+        "/": {
+          "status": 200,
+          "body_base64": "SGVsbG8sIHdvcmxkIQo=",
+          "observed_ns": 1792364570188454000
+        },
+        "/version": {
+          "status": 200,
+          "body_base64": "c3NobWNwLXVwZ3JhZGUtMzQ4NTJkZGM3MzUwNGU2YmIyZTE5YTM5NTdiMDE2OTA=",
+          "observed_ns": 1792364570190039000
+        }
+      },
+      "fresh": {
+        "probe": {
+          "trace_id": "4c868f98405d4cb290b248950120a93f",
+          "marker": "sshmcp-0282c7678f7b4643ba3ee91d35ac3696",
+          "started_ns": 1792364574380220000,
+          "count": 12
+        },
+        "ancestry": {
+          "app_span_id": "3e15ce1860e1d69e",
+          "proxy_ancestor_id": "8610e6dd8df30b27",
+          "trace_id": "4c868f98405d4cb290b248950120a93f"
+        },
+        "app_log_count": 12,
+        "proxy_json_log": true,
+        "counters": {
+          "hello-go": {
+            "name": "hello_requests_total",
+            "selector": "hello_requests_total{__type__=\"counter\",job=\"hello-go\",service_name=\"hello-go\"}",
+            "before": 103.0,
+            "type_evidence": "prometheus-otlp-type-label",
+            "after": 115.0
+          },
+          "traefik": {
+            "name": "traefik_entrypoint_requests_total",
+            "selector": "traefik_entrypoint_requests_total{__type__=\"counter\",job=\"traefik\",service_name=\"traefik\"}",
+            "before": 139.0,
+            "type_evidence": "prometheus-otlp-type-label",
+            "after": 151.0
+          }
+        },
+        "counters_increased": true,
+        "dashboard": {
+          "requests": true,
+          "latency": true,
+          "app_logs": true,
+          "proxy_logs": true,
+          "trace_navigation": true
+        }
+      },
+      "historical": {
+        "probe": {
+          "trace_id": "f91787c8ceb0423bb8bff97e64b5f4f3",
+          "marker": "sshmcp-f5c1a785dd3747778818a83d97c5c7b6",
+          "started_ns": 1792269624085485000,
+          "count": 12
+        },
+        "trace_ancestry": {
+          "app_span_id": "26311bb34f914a7d",
+          "proxy_ancestor_id": "97982adc134a14f8",
+          "trace_id": "f91787c8ceb0423bb8bff97e64b5f4f3"
+        },
+        "app_log_count": 12,
+        "proxy_json_log": true
+      },
+      "infrastructure": {
+        "container_ids": {
+          "traefik": "ec19aae461d4916c37753e24a35ce2a6876e5bf7c5e320a622ef3b0ac1802a45",
+          "lgtm": "416da748b207330a1933a4a2ff6d87c48c06aa296adb93e7380443b05cf05a6e"
+        },
+        "named_volumes": {
+          "app": [],
+          "traefik": [
+            [
+              "sshmcp-demo_proxy-logs",
+              "/var/log/traefik",
+              true
+            ]
+          ],
+          "lgtm": [
+            [
+              "sshmcp-demo_lgtm-data",
+              "/data",
+              true
+            ],
+            [
+              "sshmcp-demo_proxy-logs",
+              "/var/log/traefik",
+              false
+            ]
+          ]
+        }
+      }
+    },
+    "rollback": {
+      "app_image_id": "sha256:ec3fb38cbb9dc77e2b4d17db75325696b0b20c6ecfe2cb4eace9c0a77fbd5dc7",
+      "http": {
+        "/": {
+          "status": 200,
+          "body_base64": "SGVsbG8sIHdvcmxkIQo=",
+          "observed_ns": 1792364647479989000
+        },
+        "/version": {
+          "status": 200,
+          "body_base64": "SGVsbG8sIHdvcmxkIQo=",
+          "observed_ns": 1792364647482028000
+        }
+      },
+      "fresh": {
+        "probe": {
+          "trace_id": "101f62f1084f447aa087b5c629a0b490",
+          "marker": "sshmcp-31eb1002e6d04330a452d0fc36476d1b",
+          "started_ns": 1792364651655350000,
+          "count": 12
+        },
+        "ancestry": {
+          "app_span_id": "ba4403bb1226f67b",
+          "proxy_ancestor_id": "7ab749594766ca6b",
+          "trace_id": "101f62f1084f447aa087b5c629a0b490"
+        },
+        "app_log_count": 12,
+        "proxy_json_log": true,
+        "counters": {
+          "hello-go": {
+            "name": "hello_requests_total",
+            "selector": "hello_requests_total{__type__=\"counter\",job=\"hello-go\",service_name=\"hello-go\"}",
+            "before": 39.0,
+            "type_evidence": "prometheus-otlp-type-label",
+            "after": 51.0
+          },
+          "traefik": {
+            "name": "traefik_entrypoint_requests_total",
+            "selector": "traefik_entrypoint_requests_total{__type__=\"counter\",job=\"traefik\",service_name=\"traefik\"}",
+            "before": 190.0,
+            "type_evidence": "prometheus-otlp-type-label",
+            "after": 202.0
+          }
+        },
+        "counters_increased": true,
+        "dashboard": {
+          "requests": true,
+          "latency": true,
+          "app_logs": true,
+          "proxy_logs": true,
+          "trace_navigation": true
+        }
+      },
+      "historical": {
+        "probe": {
+          "trace_id": "f91787c8ceb0423bb8bff97e64b5f4f3",
+          "marker": "sshmcp-f5c1a785dd3747778818a83d97c5c7b6",
+          "started_ns": 1792269624085485000,
+          "count": 12
+        },
+        "trace_ancestry": {
+          "app_span_id": "26311bb34f914a7d",
+          "proxy_ancestor_id": "97982adc134a14f8",
+          "trace_id": "f91787c8ceb0423bb8bff97e64b5f4f3"
+        },
+        "app_log_count": 12,
+        "proxy_json_log": true
+      },
+      "infrastructure": {
+        "container_ids": {
+          "traefik": "ec19aae461d4916c37753e24a35ce2a6876e5bf7c5e320a622ef3b0ac1802a45",
+          "lgtm": "416da748b207330a1933a4a2ff6d87c48c06aa296adb93e7380443b05cf05a6e"
+        },
+        "named_volumes": {
+          "app": [],
+          "traefik": [
+            [
+              "sshmcp-demo_proxy-logs",
+              "/var/log/traefik",
+              true
+            ]
+          ],
+          "lgtm": [
+            [
+              "sshmcp-demo_lgtm-data",
+              "/data",
+              true
+            ],
+            [
+              "sshmcp-demo_proxy-logs",
+              "/var/log/traefik",
+              false
+            ]
+          ]
+        }
+      }
+    },
+    "interrupted": {
+      "app_image_id": "sha256:f16a8d61a4341e025a6d8086f8c47b629110ffd1766d6295c1768a5c5ce16f55",
+      "http": {
+        "/": {
+          "status": 200,
+          "body_base64": "SGVsbG8sIHdvcmxkIQo=",
+          "observed_ns": 1792364809254602000
+        },
+        "/version": {
+          "status": 200,
+          "body_base64": "c3NobWNwLWludGVycnVwdGVkLTM0ODUyZGRjNzM1MDRlNmJiMmUxOWEzOTU3YjAxNjkw",
+          "observed_ns": 1792364809256040000
+        }
+      },
+      "fresh": {
+        "probe": {
+          "trace_id": "31cb87f07b144b3184620a4d8a355d8b",
+          "marker": "sshmcp-64e438d349844ad9a54300a2c52b0125",
+          "started_ns": 1792364813418303000,
+          "count": 12
+        },
+        "ancestry": {
+          "app_span_id": "fc01cdab32dcfd37",
+          "proxy_ancestor_id": "9b79c06c087937e6",
+          "trace_id": "31cb87f07b144b3184620a4d8a355d8b"
+        },
+        "app_log_count": 12,
+        "proxy_json_log": true,
+        "counters": {
+          "hello-go": {
+            "name": "hello_requests_total",
+            "selector": "hello_requests_total{__type__=\"counter\",job=\"hello-go\",service_name=\"hello-go\"}",
+            "before": 71.0,
+            "type_evidence": "prometheus-otlp-type-label",
+            "after": 83.0
+          },
+          "traefik": {
+            "name": "traefik_entrypoint_requests_total",
+            "selector": "traefik_entrypoint_requests_total{__type__=\"counter\",job=\"traefik\",service_name=\"traefik\"}",
+            "before": 273.0,
+            "type_evidence": "prometheus-otlp-type-label",
+            "after": 285.0
+          }
+        },
+        "counters_increased": true,
+        "dashboard": {
+          "requests": true,
+          "latency": true,
+          "app_logs": true,
+          "proxy_logs": true,
+          "trace_navigation": true
+        }
+      },
+      "historical": {
+        "probe": {
+          "trace_id": "f91787c8ceb0423bb8bff97e64b5f4f3",
+          "marker": "sshmcp-f5c1a785dd3747778818a83d97c5c7b6",
+          "started_ns": 1792269624085485000,
+          "count": 12
+        },
+        "trace_ancestry": {
+          "app_span_id": "26311bb34f914a7d",
+          "proxy_ancestor_id": "97982adc134a14f8",
+          "trace_id": "f91787c8ceb0423bb8bff97e64b5f4f3"
+        },
+        "app_log_count": 12,
+        "proxy_json_log": true
+      },
+      "infrastructure": {
+        "container_ids": {
+          "traefik": "ec19aae461d4916c37753e24a35ce2a6876e5bf7c5e320a622ef3b0ac1802a45",
+          "lgtm": "416da748b207330a1933a4a2ff6d87c48c06aa296adb93e7380443b05cf05a6e"
+        },
+        "named_volumes": {
+          "app": [],
+          "traefik": [
+            [
+              "sshmcp-demo_proxy-logs",
+              "/var/log/traefik",
+              true
+            ]
+          ],
+          "lgtm": [
+            [
+              "sshmcp-demo_lgtm-data",
+              "/data",
+              true
+            ],
+            [
+              "sshmcp-demo_proxy-logs",
+              "/var/log/traefik",
+              false
+            ]
+          ]
+        }
+      }
+    }
+  },
+  "rollback_proof": {
+    "baseline_image_id": "sha256:ec3fb38cbb9dc77e2b4d17db75325696b0b20c6ecfe2cb4eace9c0a77fbd5dc7",
+    "restored_image_id": "sha256:ec3fb38cbb9dc77e2b4d17db75325696b0b20c6ecfe2cb4eace9c0a77fbd5dc7",
+    "exact_image_id_restored": true,
+    "source_config_files_before": 23,
+    "source_config_files_after": 23,
+    "all_private_source_config_hashes_equal": true,
+    "private_env_included_in_exact_hash_comparison": true,
+    "prior_version": {
+      "status": 200,
+      "body_base64": "SGVsbG8sIHdvcmxkIQo=",
+      "observed_ns": 1792364347802774000
+    },
+    "version_status_and_bytes_exact": true,
+    "preserved_release": {
+      "image_id": "sha256:ec3fb38cbb9dc77e2b4d17db75325696b0b20c6ecfe2cb4eace9c0a77fbd5dc7",
+      "preserved_files": 24,
+      "required_files": 23,
+      "extra_files": 1,
+      "extra_current_originals_matched": 1,
+      "verified": true
+    },
+    "extra_snapshot_limit": "The extra existing .json.disabled text file has no independent pre-upgrade selected hash; its declared bytes/hash and still-present original matched. It is counted separately from the 23 required files."
+  },
+  "interruption_proof": {
+    "original_key": "operations-activation-34852ddc73504e6bb2e19a3957b01690",
+    "original_job_id": "b3f91ef41df3a7a98e466b9777e89dcf",
+    "original_state": "completed",
+    "visible_activation_tool_calls": 1,
+    "same_key_visible_retries": 0,
+    "duplicate_results": 0,
+    "cli_internal_transport_retries": "not exposed",
+    "original_failure_retained": true,
+    "actor_lookup_reconciled": true,
+    "receipt_lines": 1,
+    "fault_stopped_ns": 1792364700847257000,
+    "fault_restored_ns": 1792364705097054000,
+    "observer_read_only_retries": 0,
+    "final_exit_code": 0,
+    "output_fully_drained": true,
+    "output_streams": {
+      "stdout": {
+        "final_cursor": 46,
+        "covered_ranges": [
+          [
+            0,
+            46
+          ]
+        ],
+        "sha256": "37051e8f7c82c599f56c3051df304245e53b50046b5172f6e227eeabb7f019d0"
+      },
+      "stderr": {
+        "final_cursor": 232,
+        "covered_ranges": [
+          [
+            0,
+            232
+          ]
+        ],
+        "sha256": "96fc741f9c0e87eb701d37e3a29c61946823eeba056582ff1277dfefc73c2b31"
+      }
+    },
+    "outage_seconds": 4.249797,
+    "observer_transport_failure": "ConnectionResetError",
+    "original_running_at_barrier": true,
+    "original_running_after_gateway_recovery": true
+  },
+  "interrupted_tool_errors": [
+    {
+      "item_id": "item_2",
+      "action": "execute",
+      "kind": "idempotency_conflict",
+      "activation": false,
+      "detail": "A read-only inspection used a key already present from another phase. Dispatch was rejected; the same read-only source was resubmitted with a fresh key."
+    },
+    {
+      "item_id": "item_11",
+      "action": "execute",
+      "kind": "gateway_transport_failure",
+      "activation": true
+    },
+    {
+      "item_id": "item_12",
+      "action": "lookup",
+      "kind": "gateway_transport_failure",
+      "activation": false
+    }
+  ],
+  "preservation": {
+    "traefik_lgtm_container_ids_and_named_volumes_unchanged": true,
+    "historical_probe_present_after_every_phase": true,
+    "previous_agent_demo_snapshot_files_unchanged": 25,
+    "prior_failed_baselines_verified_before_new_actors": [
+      "b2828c88365a47cab7fe808a2056a790"
+    ]
+  },
+  "prior_attempts": [
+    {
+      "run_id": "5391a1ac81a54712addf539eff58a8ab",
+      "success": false,
+      "actors_launched": 0,
+      "stage": "host permission prelaunch",
+      "primary_error": "Multipass inventory failed (exit 2).",
+      "cleanup_errors": [
+        "Private MCP diagnostics failed: control: Multipass inventory failed (exit 2).; target: Multipass inventory failed (exit 2).; Multipass inventory failed (exit 2).",
+        "Multipass inventory failed (exit 2).; Multipass inventory failed (exit 2)."
+      ]
+    },
+    {
+      "run_id": "b2828c88365a47cab7fe808a2056a790",
+      "success": false,
+      "actors_launched": 1,
+      "stage": "preserved-release independent verifier after upgrade evaluation passed",
+      "primary_error": "Independent MCP operator preserved-release failed; private input, output, job, and transcript were saved.",
+      "cleanup_errors": [],
+      "upgrade_actor": {
+        "duration_seconds": 136.95385108306073,
+        "tool_calls": 32,
+        "completed_jobs": 7,
+        "failed_jobs": 5,
+        "tool_errors": 0,
+        "runtime_errors": 0,
+        "repeated_execute_keys": 0,
+        "repeated_source_submissions": 0,
+        "duplicate_results": 0
+      },
+      "reason": "The old verifier incorrectly required exactly the 23 selected source files; the actor preserved those plus one existing safe .json.disabled text file. The failed attempt remains failed; the correction verifies required hashes and safe extras separately."
+    }
+  ],
+  "separate_prior_baseline_recovery": {
+    "run_id": "d7f928a7c4ed41429548c068499b9709",
+    "inside_accepted_actor_run": false,
+    "success": true,
+    "actors_launched": 0,
+    "recorded_mcp_operator_jobs": 10,
+    "mcp_transport_errors": 0,
+    "source_files_exactly_restored": 23,
+    "exact_original_image_and_http_restored": true,
+    "full_fresh_and_historical_telemetry_verified": true,
+    "failed_evidence_files_unchanged": 211,
+    "failed_image_source_and_baseline_guard_preserved": true,
+    "ready_pointer_not_changed": true
+  },
+  "source_provenance": {
+    "manifest": "source-manifest.json",
+    "published_files": 22,
+    "unchanged_primary_export_files": 20,
+    "supplemental_actual_python_files": 2,
+    "published_redacted_files": 0,
+    "all_published_contents_match_private_original_hashes": true,
+    "primary_sanitized_export_retained_unchanged": true
+  },
+  "actor_feedback_limit": "Final messages are actor statements, separate from independent harness API and transcript proof. The interrupted actor reported original-job recovery and correction of an older historical-data query window.",
+  "dedicated_independent_verification": {
+    "status": "PASS",
+    "report": "independent-verification.md",
+    "details": "independent-verification.json",
+    "private_evidence_directory": ".lab/results/20261018T232001Z-cp10-independent-tester-89558f49281441ceaa27eaa909cf7ffb",
+    "down_seconds": 8.576683250023052,
+    "up_seconds": 84.13373416708782,
+    "warmed_16_job_seconds": 3.3699719170108438,
+    "benchmark_run_by_this_builder": false,
+    "benchmark_run_by_dedicated_tester": true
+  },
+  "left_running": true,
+  "scope": "One accepted private Ubuntu ARM64 demo operated by administrator-authorized commands. Managed SSH was used only for infrastructure/lifecycle and the fixed gateway fault; application work and source reads used MCP.",
+  "unverified": [
+    "public HTTPS exposure",
+    "production readiness",
+    "high availability",
+    "other hosts"
+  ]
+}

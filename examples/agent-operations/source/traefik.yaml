@@ -1,0 +1,40 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+entryPoints:
+  web:
+    address: ":80"
+ping: {}
+providers:
+  file:
+    filename: /etc/traefik/routes.yaml
+    watch: true
+log:
+  level: INFO
+  format: json
+accessLog:
+  filePath: /var/log/traefik/access.json
+  format: json
+  bufferingSize: 0
+  fields:
+    defaultMode: keep
+    headers:
+      defaultMode: drop
+      names:
+        X-SSHMCP-Probe: keep
+metrics:
+  otlp:
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+    pushInterval: 5s
+    resourceAttributes:
+      service.name: traefik
+    http:
+      endpoint: http://lgtm:4318/v1/metrics
+tracing:
+  serviceName: traefik
+  sampleRate: 1.0
+  otlp:
+    http:
+      endpoint: http://lgtm:4318/v1/traces

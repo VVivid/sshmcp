@@ -1,0 +1,85 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /ready
+  file_storage:
+    directory: /data/otelcol-storage
+    create_directory: true
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  file_log/traefik:
+    include: [/var/log/traefik/access.json]
+    start_at: beginning
+    storage: file_storage
+    include_file_path: true
+    operators:
+      - type: json_parser
+        parse_to: attributes
+        timestamp:
+          parse_from: attributes.StartUTC
+          layout_type: gotime
+          layout: '2006-01-02T15:04:05.999999999Z07:00'
+      - type: trace_parser
+        trace_id:
+          parse_from: attributes.TraceId
+        span_id:
+          parse_from: attributes.SpanId
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  resource/traefik:
+    attributes:
+      - key: service.name
+        value: traefik
+        action: upsert
+  batch:
+    timeout: 1s
+    send_batch_size: 512
+exporters:
+  otlp_http/metrics:
+    endpoint: http://127.0.0.1:9090/api/v1/otlp
+    sending_queue:
+      enabled: true
+      storage: file_storage
+    retry_on_failure:
+      max_elapsed_time: 0s
+  otlp_http/traces:
+    endpoint: http://127.0.0.1:4418
+    sending_queue:
+      enabled: true
+      storage: file_storage
+    retry_on_failure:
+      max_elapsed_time: 0s
+  otlp_http/logs:
+    endpoint: http://127.0.0.1:3100/otlp
+    sending_queue:
+      enabled: true
+      storage: file_storage
+    retry_on_failure:
+      max_elapsed_time: 0s
+service:
+  extensions: [health_check, file_storage]
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/metrics]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/traces]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/logs]
+    logs/traefik:
+      receivers: [file_log/traefik]
+      processors: [memory_limiter, resource/traefik, batch]
+      exporters: [otlp_http/logs]

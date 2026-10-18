@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "operations_run_id": "34852ddc73504e6bb2e19a3957b01690",
+  "file_count": 22,
+  "published_redacted_files": 0,
+  "all_published_bytes_match_actual_private_source": true,
+  "collections": [
+    {
+      "name": "accepted-operations-export",
+      "private_evidence": ".lab/results/20261018T225859Z-demo-operations-test-34852ddc73504e6bb2e19a3957b01690/operator/source-export.jsonl",
+      "captured_files_including_private_env": 23,
+      "primary_sanitized_files": 22,
+      "primary_sanitized_redacted_files": 2,
+      "published_files_from_this_collection": 20
+    },
+    {
+      "name": "post-acceptance-read-only-mcp",
+      "run_id": "97937e22c7904e028b8471937dad411b",
+      "private_evidence": ".lab/results/20261018T230811Z-cp10-operations-source-supplement-97937e22c7904e028b8471937dad411b/operator/python-source.jsonl",
+      "captured_files": 2,
+      "published_files_from_this_collection": 2,
+      "max_files": 2,
+      "max_file_bytes": 262144,
+      "matches_accepted_private_capture": true,
+      "known_runtime_secrets_absent": true,
+      "python_syntax_valid": true,
+      "application_changes": 0,
+      "actors_launched": 0
+    }
+  ],
+  "exclusions": [
+    {
+      "path": ".env",
+      "reason": "Private environment/credential file"
+    },
+    {
+      "path": ".sshmcp-fault-c94c230b79564965bf98acd9600e7427.json.disabled",
+      "reason": "not source/config text"
+    }
+  ],
+  "bounds": {
+    "max_files": 128,
+    "max_file_bytes": 262144,
+    "max_total_bytes": 4194304,
+    "symlinks_allowed": false
+  },
+  "modes": "The capture records contents, not original modes. Published shell scripts use 0755; other files use 0644.",
+  "notes": "These are actual post-operations files from the original deployment/repair and later operations actors. No source was supplied to the operations actors, rewritten, formatted, or used to seed them. The original private primary export remains unchanged.",
+  "files": [
+    {
+      "path": ".gitignore",
+      "original_sha256": "0000f51381f260ebeaf415679f713b7db56f6e5af960ffab293719cc2915cf0d",
+      "export_sha256": "0000f51381f260ebeaf415679f713b7db56f6e5af960ffab293719cc2915cf0d",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "README.md",
+      "original_sha256": "b289261c5c94071d187630ca13af2afd86aca33b9d700d14ac7602d8b6d774e8",
+      "export_sha256": "b289261c5c94071d187630ca13af2afd86aca33b9d700d14ac7602d8b6d774e8",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "check-persistence.py",
+      "original_sha256": "00e36ffc9a10cc1fa83d8580d8bdaa91b9236e47adf90b529bb6b260911be4d7",
+      "export_sha256": "00e36ffc9a10cc1fa83d8580d8bdaa91b9236e47adf90b529bb6b260911be4d7",
+      "redacted": false,
+      "collection": "post-acceptance-read-only-mcp",
+      "primary_export_sha256": "1057579826a33679db6f41882a32e84e89e50f7a7e4d1539a303311a34b3e259",
+      "primary_export_redacted": true,
+      "note": "The generic primary exporter changed a nonliteral password-loading expression. This separate bounded MCP capture restores the actual bytes after known-runtime-secret and Python syntax checks."
+    },
+    {
+      "path": "compose.yaml",
+      "original_sha256": "a8400c30158fa6babd04ea73b692454a7835c2e21daca827ea910f4c7935f17b",
+      "export_sha256": "a8400c30158fa6babd04ea73b692454a7835c2e21daca827ea910f4c7935f17b",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "demo-traffic.sh",
+      "original_sha256": "6a5e1f9ae7efe5a8f1076ec1cce8ab8851262b76d76191554957fd4b8cdb4d65",
+      "export_sha256": "6a5e1f9ae7efe5a8f1076ec1cce8ab8851262b76d76191554957fd4b8cdb4d65",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "deploy.sh",
+      "original_sha256": "19c4ba7ea8a37aa01a682c1c1f39c539c9bf15e7743436b035c6cfabe1f74aac",
+      "export_sha256": "19c4ba7ea8a37aa01a682c1c1f39c539c9bf15e7743436b035c6cfabe1f74aac",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "otelcol.yaml",
+      "original_sha256": "40063eaa7919477fcf8cacbecbb72258527d4ba54111edc270d6518bc0f160c0",
+      "export_sha256": "40063eaa7919477fcf8cacbecbb72258527d4ba54111edc270d6518bc0f160c0",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "probe.json",
+      "original_sha256": "8fba0899c0c7a141cae5e2930a20c0da5c558348cea837f6e013d38903557070",
+      "export_sha256": "8fba0899c0c7a141cae5e2930a20c0da5c558348cea837f6e013d38903557070",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "routes.yaml",
+      "original_sha256": "abefa9e0804f1eee3a3efce8ea2411c045e73879511b0e87c430957417457ea2",
+      "export_sha256": "abefa9e0804f1eee3a3efce8ea2411c045e73879511b0e87c430957417457ea2",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "traefik.yaml",
+      "original_sha256": "82750a6ef4ff8b99ddb26f8a84881603d3b85f055836264ec840477defc423a0",
+      "export_sha256": "82750a6ef4ff8b99ddb26f8a84881603d3b85f055836264ec840477defc423a0",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "verification-before-reboot.json",
+      "original_sha256": "7eadaf0e71919e20b0b6d77f3ec6b05ab27bee1fedf02519c75db53100fc859f",
+      "export_sha256": "7eadaf0e71919e20b0b6d77f3ec6b05ab27bee1fedf02519c75db53100fc859f",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "verification-persistence.json",
+      "original_sha256": "c04f3a06823c1a5416fbb1ec162d1614d74f0131b4c7cc05e8edb40cbbc263a0",
+      "export_sha256": "c04f3a06823c1a5416fbb1ec162d1614d74f0131b4c7cc05e8edb40cbbc263a0",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "verification.json",
+      "original_sha256": "84bec30e64253270e4f3c7e361f78b764248e550f2caf455fb3222d2bf1440c6",
+      "export_sha256": "84bec30e64253270e4f3c7e361f78b764248e550f2caf455fb3222d2bf1440c6",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "verify.py",
+      "original_sha256": "9a9f79b2fb58a3c66710f5decf5d54f85312995e5d35e028548252b518afcc0c",
+      "export_sha256": "9a9f79b2fb58a3c66710f5decf5d54f85312995e5d35e028548252b518afcc0c",
+      "redacted": false,
+      "collection": "post-acceptance-read-only-mcp",
+      "primary_export_sha256": "085982c2e5c4c47fa0e0076352cec216dd4d8715e3428aab0a7b0970067ed757",
+      "primary_export_redacted": true,
+      "note": "The generic primary exporter changed a nonliteral password-loading expression. This separate bounded MCP capture restores the actual bytes after known-runtime-secret and Python syntax checks."
+    },
+    {
+      "path": "grafana/dashboards/hello.json",
+      "original_sha256": "0681442eb0984d898cd6f53e73a675d8e8ff10e5dc188ea88b05758737dc212a",
+      "export_sha256": "0681442eb0984d898cd6f53e73a675d8e8ff10e5dc188ea88b05758737dc212a",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "grafana/provisioning/dashboards/demo.yaml",
+      "original_sha256": "7dee0101d634adaf29c03a189d61158b634c95981d36b995e11aa6b780d37106",
+      "export_sha256": "7dee0101d634adaf29c03a189d61158b634c95981d36b995e11aa6b780d37106",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "grafana/provisioning/datasources/demo.yaml",
+      "original_sha256": "7a2601d9503217ce215b54121d7e559c204e4a4c276e0aa3754269e3029e98d4",
+      "export_sha256": "7a2601d9503217ce215b54121d7e559c204e4a4c276e0aa3754269e3029e98d4",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "app/.dockerignore",
+      "original_sha256": "4ae89d02076995a7264f1ef33713a163ee26838bfdad27df0d849b29b3c725eb",
+      "export_sha256": "4ae89d02076995a7264f1ef33713a163ee26838bfdad27df0d849b29b3c725eb",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "app/Dockerfile",
+      "original_sha256": "61e45dee6968f6e328b654d0e4c32afe0c8f55f0b62ae3c71934ec0d6edee8b1",
+      "export_sha256": "61e45dee6968f6e328b654d0e4c32afe0c8f55f0b62ae3c71934ec0d6edee8b1",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "app/go.mod",
+      "original_sha256": "e3d7239a06c21d3a2b6231e32f5561dd0ca89a0681fd328fe8a9e4a65bb4eb60",
+      "export_sha256": "e3d7239a06c21d3a2b6231e32f5561dd0ca89a0681fd328fe8a9e4a65bb4eb60",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "app/go.sum",
+      "original_sha256": "d27b2722f0a7171eceee5e5837501f4908235053b3a905a08b5b20b085cdb228",
+      "export_sha256": "d27b2722f0a7171eceee5e5837501f4908235053b3a905a08b5b20b085cdb228",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    },
+    {
+      "path": "app/main.go",
+      "original_sha256": "a3c4759dad6a586103c5f7a7876f862bcca157c4fd252a90f4e0a2c94fcdf2a0",
+      "export_sha256": "a3c4759dad6a586103c5f7a7876f862bcca157c4fd252a90f4e0a2c94fcdf2a0",
+      "redacted": false,
+      "collection": "accepted-operations-export"
+    }
+  ]
+}
