@@ -1,4 +1,8 @@
-# SSHMCP testing lab
+# SSHMCP
+
+Version **1.0.0** provides an authenticated MCP gateway and native execution
+runner for configured SSH targets, plus an opt-in testing lab.
+See [CHANGELOG.md](CHANGELOG.md) for the release scope and validation limits.
 
 This repository provides two reusable private Linux VM profiles and a native Go
 execution runner. The original control lab provisions Ubuntu 24.04 ARM64 with SSH, systemd,
