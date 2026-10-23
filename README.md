@@ -1,3 +1,9 @@
+> **Moved to [vvivid-workspace/SSHMCP](https://github.com/VVivid/vvivid-workspace/tree/main/SSHMCP).**
+>
+> This standalone repository is archived. Development continues in the new workspace. Please open new issues and pull requests in [VVivid/vvivid-workspace](https://github.com/VVivid/vvivid-workspace).
+>
+> The existing source, history, and releases remain here for reference.
+
 # SSHMCP
 
 Version **1.0.0** provides an authenticated MCP gateway and native execution
